@@ -46,29 +46,41 @@ function term_replace_form_taxonomy_form_term_alter(&$form, &$form_state, $form_
 * If the chosen term doesn't exist, add it to the vocabulary first.
 */
 function term_replace_form_taxonomy_form_term_submit($form, &$form_state) {
-	$term = null;
-
-	$existing_term = taxonomy_get_term_by_name($form_state['values']['replacement_term']);
-	foreach ($existing_term as $potential) {
-		if ($potential->vocabulary_machine_name === $form['vocabulary']['machine_name'] && 
-			$potential->name === $form_state['values']['replacement_term']) {
-				$term = $potential;
-		}
-	}
-	
-	if (!$term) {
-		$term = new stdClass();
-		$term->name = $form_state['values']['replacement_term'];
-		$term->description = NULL;
-		$term->format = filter_fallback_format();
-		$term->weight = -10;
-		$term->vid = $form['#vocabulary']->vid;
-		$term->vocabulary_machine_name = $form['#vocabulary']->machine_name;
+	if (strlen($form_state['values']['replacement_term']) > 0) {
+		$term = null;
 		
-    $status = taxonomy_term_save($term);
-    dsm($status);
-	}
-  
+		$existing_term = taxonomy_get_term_by_name($form_state['values']['replacement_term']);
+		//dsm('Wanted term name: ' . $form_state['values']['replacement_term']);
+		//dsm('Wanted vocabulary: ' . $form['#vocabulary']['machine_name']);
+		//dsm($existing_term);
+		foreach ($existing_term as $potential) {
+			if ($potential->vocabulary_machine_name == $form['#vocabulary']->machine_name && 
+				$potential->name == $form_state['values']['replacement_term']) {
+					$term = $potential;
+			}
+		}
+		
+		if (!$term) {
+			$term = new stdClass();
+			$term->name = $form_state['values']['replacement_term'];
+			$term->description = NULL;
+			$term->format = filter_fallback_format();
+			$term->weight = -10;
+			$term->vid = $form['#vocabulary']->vid;
+			$term->vocabulary_machine_name = $form['#vocabulary']->machine_name;
+			
+	    $status = taxonomy_term_save($term);
+	    drupal_set_message(t('Created term "@termname".', array	('@termname' => $term->name)));
+		}
+		
+		$query = db_select('taxonomy_index', 'ti');
+	  $query->fields('ti', array('nid'));
+	  $query->condition('tid', $form['#term']->tid);
+	  $result = $query->execute()->fetchAssoc();
+	  
+	    
+		dsm($result);
+  }
 }
 
 /**

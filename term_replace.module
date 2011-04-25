@@ -50,9 +50,6 @@ function term_replace_form_taxonomy_form_term_submit($form, &$form_state) {
 		$term = null;
 		
 		$existing_term = taxonomy_get_term_by_name($form_state['values']['replacement_term']);
-		//dsm('Wanted term name: ' . $form_state['values']['replacement_term']);
-		//dsm('Wanted vocabulary: ' . $form['#vocabulary']['machine_name']);
-		//dsm($existing_term);
 		foreach ($existing_term as $potential) {
 			if ($potential->vocabulary_machine_name == $form['#vocabulary']->machine_name && 
 				$potential->name == $form_state['values']['replacement_term']) {
@@ -70,16 +67,40 @@ function term_replace_form_taxonomy_form_term_submit($form, &$form_state) {
 			$term->vocabulary_machine_name = $form['#vocabulary']->machine_name;
 			
 	    $status = taxonomy_term_save($term);
-	    drupal_set_message(t('Created term "@termname".', array	('@termname' => $term->name)));
+	    
+	    drupal_set_message(t('Created term %termname.', array	('%termname' => $term->name)));
 		}
 		
-		$referencing_nodes = db_select('taxonomy_index', 'ti')
-			->fields('ti', array('nid'))
+		$select_result = db_select('taxonomy_index', 'ti')
+			->fields('ti', array('nid', 'created', 'sticky'))
 			->condition('tid', $form['#term']->tid)
-	  	->execute()->fetchAssoc();
+	  	->execute();
 	  
+	  //dsm($select_result, 'select result');
+	  if (!empty($select_result)) {
+			$insert_query = db_insert('taxonomy_index')->fields(array('nid', 'tid', 'sticky', 'created', ));
+	    foreach ($select_result as $item) {
+	    	//dsm($item, 'select result item');
+	    	$node = node_load($item->nid, null, true);
+	    	//$node->{'field_' . $form['#vocabulary']->machine_name . '_term'}[$node->language][] = array('tid' => $term->tid);
+	    	array_unshift($node->{'field_' . $form['#vocabulary']->machine_name . '_term'}[$node->language], array('tid' => $term->tid));
+	    	dsm($node);
+				node_save((object) $node);
+	    	/*
+	    	dsm($item->nid . '-' . $term->tid . '-' . $item->sticky . '-' . $item->created);
+	      $insert_query->values(array(
+	        'nid' => $item->nid,
+	        'tid' => $term->tid,
+	        'sticky' => $item->sticky,
+	        'created' => $item->created,
+	      ));
+	      */
+	    }
 	    
-		dsm($result);
+	    $insert_result = $insert_query->execute();
+			//taxonomy_terms_static_reset();
+			//dsm($insert_result);
+		}
   }
 }
 

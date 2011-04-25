@@ -1,0 +1,7 @@
+name = Term Replace
+description = ...
+package = Other
+version = 1
+core = 7.x
+ 
+files[] = term_replace.module

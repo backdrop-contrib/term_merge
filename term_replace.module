@@ -1,0 +1,93 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * TODO: Create a simple contact form block.
+ */
+ 
+/**
+ * Implements hook_menu().
+ */
+function term_replace_menu() {
+  $items['taxonomyreplace/autocomplete/%'] = array(
+    'title' => 'Autocomplete taxonomy replace',
+    'page callback' => 'term_replace_term_autocomplete',
+    'access arguments' => array('access content'),
+    'page arguments' => array(2),
+    'type' => MENU_CALLBACK,
+  );
+  
+  return $items;
+}
+
+/**
+*	Implements hook_form_alter().
+*/
+function term_replace_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id) {
+	if (isset($form['delete'])) {
+		
+		array_unshift($form['#submit'], 'term_replace_form_taxonomy_form_term_submit');
+		
+		$form['description']['#markup'] = t($form['description']['#markup'] . ' If you\'d like, you can replace the deleted term wherever it\'s used by entering a replacement term in the textfield below.'); 
+		
+		$form['replacement_term'] = array(
+			'#type' => 'textfield',
+			'#title' => t('Replacement term'),
+			'#autocomplete_path' => 'taxonomyreplace/autocomplete/' . $form['#vocabulary']->vid,
+		);
+		
+		dsm($form);
+	}
+}
+
+/**
+*	Adds te chosen term to all nodes that was using the deleted term.
+* If the chosen term doesn't exist, add it to the vocabulary first.
+*/
+function term_replace_form_taxonomy_form_term_submit($form, &$form_state) {
+	$term = null;
+
+	$existing_term = taxonomy_get_term_by_name($form_state['values']['replacement_term']);
+	foreach ($existing_term as $potential) {
+		if ($potential->vocabulary_machine_name === $form['vocabulary']['machine_name'] && 
+			$potential->name === $form_state['values']['replacement_term']) {
+				$term = $potential;
+		}
+	}
+	
+	if (!$term) {
+		$term = new stdClass();
+		$term->name = $form_state['values']['replacement_term'];
+		$term->description = NULL;
+		$term->format = filter_fallback_format();
+		$term->weight = -10;
+		$term->vid = $form['#vocabulary']->vid;
+		$term->vocabulary_machine_name = $form['#vocabulary']->machine_name;
+		
+    $status = taxonomy_term_save($term);
+    dsm($status);
+	}
+  
+}
+
+/**
+*	Autocomplete helper function for the term replacement textfield.
+*/
+function term_replace_term_autocomplete($vid, $typed = '') {
+
+	$tree = taxonomy_get_tree($vid);	
+	$output = array();
+	foreach ($tree as $i => $term) {
+		$tn = $term->name;
+		if (strpos(strtolower($tn), strtolower($typed)) !== FALSE) {
+			// Term names containing commas or quotes must be wrapped in quotes.
+			if (strpos($tn, ',') !== FALSE || strpos($tn, '"') !== FALSE) {
+        $tn = '"' . str_replace('"', '""', $tn) . '"';
+      }
+			$output[$tn] = $tn;
+		}
+	}
+
+	drupal_json_output($output);
+}

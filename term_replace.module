@@ -76,16 +76,21 @@ function term_replace_form_taxonomy_form_term_submit($form, &$form_state) {
 			->condition('tid', $form['#term']->tid)
 	  	->execute();
 	  
-	  //dsm($select_result, 'select result');
 	  if (!empty($select_result)) {
 			$insert_query = db_insert('taxonomy_index')->fields(array('nid', 'tid', 'sticky', 'created', ));
 	    foreach ($select_result as $item) {
-	    	//dsm($item, 'select result item');
 	    	$node = node_load($item->nid, null, true);
+	    	
+	    	/* ToDo: Why wont a regular push work? */
 	    	//$node->{'field_' . $form['#vocabulary']->machine_name . '_term'}[$node->language][] = array('tid' => $term->tid);
 	    	array_unshift($node->{'field_' . $form['#vocabulary']->machine_name . '_term'}[$node->language], array('tid' => $term->tid));
-	    	dsm($node);
+	    	
+	    	//dsm($node);
+	    	//dsm($form);
+	    	//dsm($form_values);
 				node_save((object) $node);
+				
+				/* OLD CODE */
 	    	/*
 	    	dsm($item->nid . '-' . $term->tid . '-' . $item->sticky . '-' . $item->created);
 	      $insert_query->values(array(
@@ -97,7 +102,7 @@ function term_replace_form_taxonomy_form_term_submit($form, &$form_state) {
 	      */
 	    }
 	    
-	    $insert_result = $insert_query->execute();
+	    //$insert_result = $insert_query->execute();
 			//taxonomy_terms_static_reset();
 			//dsm($insert_result);
 		}

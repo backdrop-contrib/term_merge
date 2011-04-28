@@ -36,8 +36,6 @@ function term_replace_form_taxonomy_form_term_alter(&$form, &$form_state, $form_
 			'#title' => t('Replacement term'),
 			'#autocomplete_path' => 'taxonomyreplace/autocomplete/' . $form['#vocabulary']->vid,
 		);
-		
-		dsm($form);
 	}
 }
 
@@ -57,6 +55,26 @@ function term_replace_form_taxonomy_form_term_submit($form, &$form_state) {
 			}
 		}
 		
+		dsm($form);
+		dsm($form_state);
+		if ($term && $term->tid == $form['#term']->tid) {
+			//drupal_set_message(t('Cannot replace a term with itself.'), 'error');
+			form_set_error('replacement_term', t('Cannot replace a term with itself.'));
+			$form_state['values']['delete'] = FALSE;
+			return;			
+		} else {
+			$form_state['values']['delete'] = TRUE;
+			//$form_state['rebuild'] = FALSE;
+			//$form_state['confirm_delete'] = TRUE;
+		}
+		dsm($form_state);
+		/*
+			$form_state['rebuild'] = TRUE;
+    $form_state['confirm_delete'] = TRUE;
+
+		*/
+		
+		// Create the term if it does'nt exist.
 		if (!$term) {
 			$term = new stdClass();
 			$term->name = $form_state['values']['replacement_term'];
@@ -76,36 +94,50 @@ function term_replace_form_taxonomy_form_term_submit($form, &$form_state) {
 			->condition('tid', $form['#term']->tid)
 	  	->execute();
 	  
+	  // If there are any nodes containing the deleted term, add the replacement term to them.
 	  if (!empty($select_result)) {
 			$insert_query = db_insert('taxonomy_index')->fields(array('nid', 'tid', 'sticky', 'created', ));
 	    foreach ($select_result as $item) {
 	    	$node = node_load($item->nid, null, true);
+	    		    	
+	    	// Find the field containing the deleted term tid.
+	    	// ToDo: Is the language of the term always the same as yhe language of the node?
+	    	$term_field = null;
+	    	foreach ($node as &$item) {
+	    		if (is_array($item) && isset($item[$node->language])) {
+	    			foreach ($item[$node->language] as $fieldValue) {
+	    				if (isset($fieldValue['tid']) && $fieldValue['tid'] == $form['#term']->tid) {
+	    					$term_field = &$item[$node->language];
+	    					break;
+	    				}
+	    			}
+	    			if ($term_field) break;
+	    		}
+	    	}
 	    	
-	    	/* ToDo: Why wont a regular push work? */
-	    	//$node->{'field_' . $form['#vocabulary']->machine_name . '_term'}[$node->language][] = array('tid' => $term->tid);
-	    	array_unshift($node->{'field_' . $form['#vocabulary']->machine_name . '_term'}[$node->language], array('tid' => $term->tid));
+	    	if ($term_field) {
+	    		// Add the replacement term to the field array.
+	    		// ToDo: There may be more fields containing a reference to a term.
+	    		// ToDo: Why do I have to use array_unshift?.
+	    		array_unshift($term_field, array('tid' => $term->tid));
+	    	} else {
+	    		drupal_set_message(t('Could\'nt find the field containing the deleted term id.'), 'error');
+	    	}
 	    	
-	    	//dsm($node);
-	    	//dsm($form);
-	    	//dsm($form_values);
+	    	// Save the node with the new replacement term added.
 				node_save((object) $node);
-				
-				/* OLD CODE */
-	    	/*
-	    	dsm($item->nid . '-' . $term->tid . '-' . $item->sticky . '-' . $item->created);
-	      $insert_query->values(array(
-	        'nid' => $item->nid,
-	        'tid' => $term->tid,
-	        'sticky' => $item->sticky,
-	        'created' => $item->created,
-	      ));
-	      */
 	    }
-	    
-	    //$insert_result = $insert_query->execute();
-			//taxonomy_terms_static_reset();
-			//dsm($insert_result);
 		}
+		
+		drupal_set_message(
+			t(
+				'Added term "@replace_name" to all nodes containing the deleted term "@name".',
+				array(
+					'@replace_name' => $form_state['values']['replacement_term'],
+					'@name' => $term->name
+				)
+			)
+		);
   }
 }
 

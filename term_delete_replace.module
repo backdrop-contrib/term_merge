@@ -3,7 +3,6 @@
 
 /**
  * @file
- * TODO: Create a simple contact form block.
  */
  
 /**
@@ -25,17 +24,19 @@ function term_delete_replace_menu() {
 *	Implements hook_form_alter().
 */
 function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id) {
-	if (isset($form['delete'])) {
-		
-		array_unshift($form['#submit'], 'term_delete_replace_form_taxonomy_form_term_submit');
-		
+	// Only modify the form if it is in the "Confirm Delete" mode.
+	if (isset($form_state['confirm_delete']) && $form_state['confirm_delete'] === TRUE) {
+	
 		$form['description']['#markup'] = t($form['description']['#markup'] . '<br /><br />' . t('You can replace any occurrences of the deleted term with another term by specifying the replacement term below. This is useful when correcting typos, or to consolidate multiple synonymous terms.')); 
 		
 		$form['replacement_term'] = array(
 			'#type' => 'textfield',
 			'#title' => t('Replacement term'),
-			'#autocomplete_path' => 'taxonomyreplace/autocomplete/' . $form['#vocabulary']->vid,
+			'#autocomplete_path' => 'taxonomyreplace/autocomplete/' . $form['#vocabulary']->vid . '/' . $form['#term']->name,
 		);
+
+    array_unshift($form['#submit'], 'term_delete_replace_form_taxonomy_form_term_submit');
+    
 	}
 }
 
@@ -45,9 +46,10 @@ function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state,
 */
 function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state) {
 	if (strlen($form_state['values']['replacement_term']) > 0) {
-		$term = null;
-		
+	
+		$term = null;	
 		$existing_term = taxonomy_get_term_by_name($form_state['values']['replacement_term']);
+		// Find out if the replacement term already exists.
 		foreach ($existing_term as $potential) {
 			if ($potential->vocabulary_machine_name == $form['#vocabulary']->machine_name && 
 				$potential->name == $form_state['values']['replacement_term']) {
@@ -55,19 +57,14 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
 			}
 		}
 		
-		// ToDo: Add behaviour when the administrator tries to replace references to the deleted term with references to that same term.
-		/*
+		// Check if the replacement term is the same as the deleted term. In that case, tell that to the user and return.
 		if ($term && $term->tid == $form['#term']->tid) {
-			form_set_error('replacement_term', t('Cannot replace the a deleted term with itself.'));
+			drupal_set_message(t('Please select another replacement term, cannot replace the a deleted term with itself.'), 'error');
 			$form_state['values']['delete'] = FALSE;
 			return;			
-		} else {
-			$form_state['rebuild'] = FALSE;
-			$form_state['confirm_delete'] = FALSE;
 		}
-		*/
 		
-		// Create the term if it does'nt exist.
+		// Create and save the replacement term if it doesn't exist.
 		if (!$term) {
 			$term = new stdClass();
 			$term->name = $form_state['values']['replacement_term'];
@@ -82,18 +79,18 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
 	    drupal_set_message(t('Created term %termname.', array	('%termname' => $term->name)));
 		}
 		
+		// Get all nodes containing fields referencing to the deleted term.
 		$related_nodes_data = db_select('taxonomy_index', 'ti')
 			->fields('ti', array('nid', 'created', 'sticky'))
 			->condition('tid', $form['#term']->tid)
 	  	->execute();
 	  
-	  // If there are any nodes containing the deleted term, add the replacement term to them.
+	  // If there are any nodes with fields containing references to the deleted term, add the replacement term to them.
 	  if (!empty($related_nodes_data)) {
-			$insert_query = db_insert('taxonomy_index')->fields(array('nid', 'tid', 'sticky', 'created', ));
 	    foreach ($related_nodes_data as $node_data) {
 	    	$node = node_load($node_data->nid, null, true);
 	    		    	
-	    	// Find the vocabulary fields containing the deleted term tid.
+	    	// Find the "vocabulary fields" containing the deleted term tid.
 	    	$vocabulary_fields = _term_delete_replace_get_vocabulary_fields($node, $form['#term']->tid);
 	    	
 	    	if (!empty($vocabulary_fields)) {
@@ -103,19 +100,21 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
 	    			// ToDo: Is the language of the term always the same as the language of the node?
 	    			array_unshift($node->{$fieldname}[$node->language], array('tid' => $term->tid));
 	    		}
-	    	} else {
+	    	} else {	// This shouldn't happen. But if it does, don't delete the term, just rebuild the form.
 	    		drupal_set_message(t('Could\'nt find any field containing the deleted term tid, term references was not replaced.'), 'error');
+	    		$form_state['values']['delete'] = FALSE;
 	    		return;
 	    	}
 	    	
-	    	// Save the node with the new replacement term added.
+	    	// Save the node with the replacement term added.
 				node_save((object) $node);
 	    }
 		}
 		
+		// Tell user that replacement went successful.
 		drupal_set_message(
 			t(
-				'Added term reference "@replace_name" to all fields referencing the deleted term',
+				'Added term reference "@replace_name" to all fields referencing the deleted term.',
 				array(
 					'@replace_name' => $form_state['values']['replacement_term'],
 				)
@@ -127,13 +126,16 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
 /**
 *	Autocomplete function for the replacement term textfield.
 */
-function term_delete_replace_term_autocomplete($vid, $typed = '') {
-
+function term_delete_replace_term_autocomplete($vid, $typed = '', $deletedTermName) {
 	$tree = taxonomy_get_tree($vid);	
 	$output = array();
 	foreach ($tree as $i => $term) {
 		$tn = $term->name;
-		if (strpos(strtolower($tn), strtolower($typed)) !== FALSE) {
+		/*
+		*	Check if the current term contains the characters it should.
+		* Also check to see that the current term isn't the same as the deleted one, we dont't want that one.
+		*/
+		if (strpos(strtolower($tn), strtolower($typed)) !== FALSE && $tn != $deletedTermName) {
 			// Term names containing commas or quotes must be wrapped in quotes.
 			if (strpos($tn, ',') !== FALSE || strpos($tn, '"') !== FALSE) {
         $tn = '"' . str_replace('"', '""', $tn) . '"';
@@ -141,12 +143,13 @@ function term_delete_replace_term_autocomplete($vid, $typed = '') {
 			$output[$tn] = $tn;
 		}
 	}
-
+	
+	// Return result.
 	drupal_json_output($output);
 }
 
 /**
-*	Helpet function getting the vocabulary fields containing the term with specified tid.
+*	Helper function getting the vocabulary fields containing the term with specified tid.
 */
 function _term_delete_replace_get_vocabulary_fields($node, $tid) {
 	$fields = array();

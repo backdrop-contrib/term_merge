@@ -8,11 +8,11 @@
  * Implements hook_menu().
  */
 function term_delete_replace_menu() {
-  $items['taxonomyreplace/autocomplete/%'] = array(
+  $items['taxonomyreplace/autocomplete/%/%'] = array(
     'title' => 'Autocomplete taxonomy replace',
     'page callback' => 'term_delete_replace_term_autocomplete',
     'access arguments' => array('access content'),
-    'page arguments' => array(2),
+    'page arguments' => array(2, 3),
     'type' => MENU_CALLBACK,
   );
   
@@ -25,7 +25,7 @@ function term_delete_replace_menu() {
 function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id) {
 	// Only modify the form if it is in the "Confirm Delete" mode.
 	if (isset($form_state['confirm_delete']) && $form_state['confirm_delete'] === TRUE) {
-	
+
 		$form['description']['#markup'] = t($form['description']['#markup'] . '<br /><br />' . t('You can replace any occurrences of the deleted term with another term by specifying the replacement term below. This is useful when correcting typos, or to consolidate multiple synonymous terms.')); 
 		
 		$form['replacement_term'] = array(
@@ -35,7 +35,6 @@ function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state,
 		);
 
     array_unshift($form['#submit'], 'term_delete_replace_form_taxonomy_form_term_submit');
-    
 	}
 }
 
@@ -46,12 +45,14 @@ function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state,
 function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state) {
 	if (strlen($form_state['values']['replacement_term']) > 0) {
 	
+		$replacement_term_name = check_plain($form_state['values']['replacement_term']);
+	
 		$term = null;	
-		$existing_term = taxonomy_get_term_by_name($form_state['values']['replacement_term']);
+		$existing_term = taxonomy_get_term_by_name($replacement_term_name);
 		// Find out if the replacement term already exists.
 		foreach ($existing_term as $potential) {
 			if ($potential->vocabulary_machine_name == $form['#vocabulary']->machine_name && 
-				$potential->name == $form_state['values']['replacement_term']) {
+				$potential->name == $replacement_term_name) {
 					$term = $potential;
 			}
 		}
@@ -125,11 +126,14 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
 /**
 *	Autocomplete function for the replacement term textfield.
 */
-function term_delete_replace_term_autocomplete($vid, $typed = '', $deletedTermName) {
+function term_delete_replace_term_autocomplete($vid, $deletedTermName, $typed) {
 	$tree = taxonomy_get_tree($vid);	
 	$output = array();
+	
+	
 	foreach ($tree as $i => $term) {
 		$tn = $term->name;
+
 		/*
 		*	Check if the current term contains the characters it should.
 		* Also check to see that the current term isn't the same as the deleted one, we dont't want that one.

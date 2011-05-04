@@ -1,7 +1,6 @@
 name = Term Delete Replace
 description = Allows you to automatically replace references to a particilar taxonomy term with another term when the former term is being deleted.
 package = Utilities
-version = 7.x-1.x-alpha1
 core = 7.x
  
 files[] = term_delete_replace.module

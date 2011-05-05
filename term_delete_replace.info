@@ -1,5 +1,5 @@
-name = Term Delete Replace
-description = Allows you to automatically replace references to a particilar taxonomy term with another term when the former term is being deleted.
+name = Term delete replace
+description = Allows you to automatically replace references to a particular taxonomy term with another term when the former term is being deleted.
 package = Utilities
 core = 7.x
  

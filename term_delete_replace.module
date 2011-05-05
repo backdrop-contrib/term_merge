@@ -1,14 +1,10 @@
 <?php
 
 /**
- * @file
- */
-
-/**
  * Implements hook_menu().
  */
 function term_delete_replace_menu() {
-  $items['taxonomyreplace/autocomplete/%/%'] = array(
+  $items['term_delete_replace/autocomplete/%/%'] = array(
     'title' => 'Autocomplete taxonomy replace',
     'page callback' => 'term_delete_replace_term_autocomplete',
     'access arguments' => array('access content'),
@@ -20,18 +16,18 @@ function term_delete_replace_menu() {
 }
 
 /**
- * Implements hook_form_alter().
+ * Implements hook_form_FORM_ID_alter().
  */
 function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id) {
   // Only modify the form if it is in the "Confirm Delete" mode.
   if (isset($form_state['confirm_delete']) && $form_state['confirm_delete'] === TRUE) {
 
-    $form['description']['#markup'] = t($form['description']['#markup'] . '<br /><br />' . t('You can replace any occurrences of the deleted term with another term by specifying the replacement term below. This is useful when correcting typos, or to consolidate multiple synonymous terms.'));
+    $form['description']['#markup'] = $form['description']['#markup'] . '<br /><br />' . t('You can replace any occurrences of the deleted term with another term by specifying the replacement term below. This is useful when correcting typos, or to consolidate multiple synonymous terms.');
 
     $form['replacement_term'] = array(
       '#type' => 'textfield',
       '#title' => t('Replacement term'),
-      '#autocomplete_path' => 'taxonomyreplace/autocomplete/' . $form['#vocabulary']->vid . '/' . $form['#term']->name,
+      '#autocomplete_path' => 'term_delete_replace/autocomplete/' . $form['#vocabulary']->vid . '/' . $form['#term']->name,
     );
 
     array_unshift($form['#submit'], 'term_delete_replace_form_taxonomy_form_term_submit');
@@ -39,7 +35,7 @@ function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state,
 }
 
 /**
- * Adds te chosen term to all nodes that was using the deleted term.
+ * Adds the chosen term to all nodes that were using the deleted term.
  * If the chosen term doesn't exist, add it to the vocabulary first.
  */
 function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state) {
@@ -115,7 +111,7 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
     // Tell user that replacement went successful.
     drupal_set_message(
       t(
-        'Added term reference "@replace_name" to all fields referencing the deleted term.',
+        'Added term reference "@replace_name" to all nodes referencing to the deleted term.',
         array(
           '@replace_name' => $form_state['values']['replacement_term'],
         )
@@ -127,28 +123,27 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
 /**
  * Autocomplete function for the replacement term textfield.
  */
-function term_delete_replace_term_autocomplete($vid, $deletedTermName, $typed) {
+function term_delete_replace_term_autocomplete($vid, $deleted_term_name, $typed) {
   $tree = taxonomy_get_tree($vid);
   $output = array();
 
 
   foreach ($tree as $i => $term) {
-    $tn = $term->name;
+    $term_name = $term->name;
 
     /*
      * Check if the current term contains the characters it should.
      * Also check to see that the current term isn't the same as the deleted one, we dont't want that one.
      */
-    if (strpos(drupal_strtolower($tn), drupal_strtolower($typed)) !== FALSE && $tn != $deletedTermName) {
+    if (strpos(drupal_strtolower($term_name), drupal_strtolower($typed)) !== FALSE && $term_name != $deleted_term_name) {
       // Term names containing commas or quotes must be wrapped in quotes.
-      if (strpos($tn, ',') !== FALSE || strpos($tn, '"') !== FALSE) {
-        $tn = '"' . str_replace('"', '""', $tn) . '"';
+      if (strpos($term_name, ',') !== FALSE || strpos($term_name, '"') !== FALSE) {
+        $term_name = '"' . str_replace('"', '""', $term_name) . '"';
       }
-      $output[$tn] = $tn;
+      $output[$term_name] = $term_name;
     }
   }
 
-  // Return result.
   drupal_json_output($output);
 }
 
@@ -168,3 +163,4 @@ function _term_delete_replace_get_vocabulary_fields($node, $tid) {
   }
   return $fields;
 }
+

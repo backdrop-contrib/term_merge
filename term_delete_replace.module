@@ -193,12 +193,23 @@ function _term_delete_replace_merge_insert_field_values($update_data, &$context)
     // For each language array in the field.
     foreach ($entity_field_langs as &$entity_field_lang_values) {
 
-      // Insert the new field value at it's correct position.
-      array_splice(
-        $entity_field_lang_values,
-        $update_data_arr['delta'], 0,
-        array(array('tid' => $update_data_arr['tid']))
-      );
+      // See if the replacement term already exists in the field.
+      $exist = FALSE;
+      foreach ($entity_field_lang_values as $value) {
+        if ($value['tid'] == $update_data_arr['tid']) {
+          $exist = TRUE;
+          break;
+        }
+      }
+
+      // Insert the new field value at it's correct position if the replacement tid doesn't already exist.
+      if (!$exist) {
+        array_splice(
+          $entity_field_lang_values,
+          $update_data_arr['delta'], 0,
+            array(array('tid' => $update_data_arr['tid']))
+        );
+      }
 
     }
 

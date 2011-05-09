@@ -1,166 +1,254 @@
 <?php
 
-/**
- * Implements hook_menu().
- */
-function term_delete_replace_menu() {
-  $items['term_delete_replace/autocomplete/%/%'] = array(
-    'title' => 'Autocomplete taxonomy replace',
-    'page callback' => 'term_delete_replace_term_autocomplete',
-    'access arguments' => array('access content'),
-    'page arguments' => array(2, 3),
-    'type' => MENU_CALLBACK,
-  );
-
-  return $items;
-}
 
 /**
  * Implements hook_form_FORM_ID_alter().
+ *
+ * Add fields for term merging on the confirm deletion state of the form.
  */
 function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id) {
-  // Only modify the form if it is in the "Confirm Delete" mode.
+  // Only modify the form if it is in the "Confirm Delete" states.
   if (isset($form_state['confirm_delete']) && $form_state['confirm_delete'] === TRUE) {
 
-    $form['description']['#markup'] = $form['description']['#markup'] . '<br /><br />' . t('You can replace any occurrences of the deleted term with another term by specifying the replacement term below. This is useful when correcting typos, or to consolidate multiple synonymous terms.');
+    $form['description']['#markup'] = $form['description']['#markup'] . '<br /><br />' . t('You can replace any occurrences of the deleted term with another term by specifying the replacement below. This is useful when correcting typos, or to consolidate multiple, synonymous terms.') . '<br /><br />';
+
+    $form['replacement_term_replace'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Replace deleted term with:'),
+      '#prefix' => '<div>',
+    );
 
     $form['replacement_term'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Replacement term'),
-      '#autocomplete_path' => 'term_delete_replace/autocomplete/' . $form['#vocabulary']->vid . '/' . $form['#term']->name,
+      '#type' => 'select',
+      '#options' => _term_delete_form_replacement_term_options($form['#vocabulary']->vid, $form['#term']->tid),
+      '#suffix' => '</div>',
     );
 
-    array_unshift($form['#submit'], 'term_delete_replace_form_taxonomy_form_term_submit');
+    $form['replacement_term_new'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Name of new term'),
+    );
+
+    $form['#after_build'] = array('_term_delete_replace_form_attach');
+
+    $form['#submit'] = array('term_delete_replace_form_taxonomy_form_term_submit');
+    $form['#validate'] = array('term_delete_replace_form_taxonomy_form_term_validate');
   }
 }
 
 /**
- * Adds the chosen term to all nodes that were using the deleted term.
- * If the chosen term doesn't exist, add it to the vocabulary first.
+ * Implements hook_form_validate().
+ *
+ * Checks to see if I've entered a name for the new term if
+ * the user wants to create a new term to merge with.
+ */
+function term_delete_replace_form_taxonomy_form_term_validate($form, &$form_state) {
+  if ($form_state['values']['replacement_term'] == 'create_replace_new_8563' &&
+      empty($form_state['values']['replacement_term_new'])) {
+
+    form_set_error('replacement_term_new', t('You must enter a name for the new term.'));
+  }
+}
+
+/**
+ * Implements hook_form_submit();
+ *
+ * If the user choose to create a new tid for merging, create and save a term with the entered name.
+ * Call the merge function to merge the replacement term into the deleted term.
  */
 function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state) {
-  if (drupal_strlen($form_state['values']['replacement_term']) > 0) {
+  if ($form_state['values']['replacement_term_replace']) {
 
-    $replacement_term_name = check_plain($form_state['values']['replacement_term']);
+    $replacement_term = $form_state['values']['replacement_term'];
+    // Create a new tid.
+    if ($replacement_term == 'create_replace_new_8563') {
 
-    $term = NULL;
-    $existing_term = taxonomy_get_term_by_name($replacement_term_name);
-    // Find out if the replacement term already exists.
-    foreach ($existing_term as $potential) {
-      if ($potential->vocabulary_machine_name == $form['#vocabulary']->machine_name &&
-        $potential->name == $replacement_term_name) {
-        $term = $potential;
-      }
+      // get parent of deleted term.
+      $deleted_parent_result = db_select('taxonomy_term_hierarchy', 'tth')
+        ->fields('tth', array('parent'))
+        ->condition('tid' , $form['#term']->tid)
+        ->execute()
+        ->fetchAssoc();
+
+      $new_term = new stdClass();
+      $new_term->name = check_plain($form_state['values']['replacement_term_new']);
+      $new_term->vid = $form['#vocabulary']->vid;
+      $new_term->parent = $deleted_parent_result['parent'];
+      $new_term->vocabulary_machine_name = $form['#vocabulary']->machine_name;
+      $new_term->description = '';
+
+      taxonomy_term_save((object) $new_term);
+
+      $dest_tid = $new_term->tid;
+    }
+    else {  // Else the $replacement_term will contain the tid of the new term.
+      $dest_tid = $replacement_term;
     }
 
-    // Check if the replacement term is the same as the deleted term. In that case, tell that to the user and return.
-    if ($term && $term->tid == $form['#term']->tid) {
-      drupal_set_message(t('Please select another replacement term, cannot replace the a deleted term with itself.'), 'error');
-      $form_state['values']['delete'] = FALSE;
-      return;
-    }
-
-    // Create and save the replacement term if it doesn't exist.
-    if (!$term) {
-      $term = new stdClass();
-      $term->name = $form_state['values']['replacement_term'];
-      $term->description = NULL;
-      $term->format = filter_fallback_format();
-      $term->weight = -10;
-      $term->vid = $form['#vocabulary']->vid;
-      $term->vocabulary_machine_name = $form['#vocabulary']->machine_name;
-
-      $status = taxonomy_term_save($term);
-
-      drupal_set_message(t('Created term @termname.', array('@termname' => $term->name)));
-    }
-
-    // Get all nodes containing fields referencing to the deleted term.
-    $related_nodes_data = db_select('taxonomy_index', 'ti')
-    ->fields('ti', array('nid', 'created', 'sticky'))
-    ->condition('tid', $form['#term']->tid)
-    ->execute();
-
-    // If there are any nodes with fields containing references to the deleted term, add the replacement term to them.
-    if (!empty($related_nodes_data)) {
-      foreach ($related_nodes_data as $node_data) {
-        $node = node_load($node_data->nid, NULL, TRUE);
-
-        // Find the "vocabulary fields" containing the deleted term tid.
-        $vocabulary_fields = _term_delete_replace_get_vocabulary_fields($node, $form['#term']->tid);
-
-        if (!empty($vocabulary_fields)) {
-          // Add the replacement term to the fields containining the deleted one.
-          foreach ($vocabulary_fields as $fieldname) {
-            // ToDo: Why do I have to use array_unshift? On push, the field api will remove the data for the wrong field in the field's table...
-            // ToDo: Is the language of the term always the same as the language of the node?
-            array_unshift($node->{$fieldname}[$node->language], array('tid' => $term->tid));
-          }
-        }
-        else { // This shouldn't happen. But if it does, don't delete the term, just rebuild the form.
-          drupal_set_message(t('Could\'nt find any field containing the deleted term tid, term references was not replaced.'), 'error');
-          $form_state['values']['delete'] = FALSE;
-          return;
-        }
-
-        // Save the node with the replacement term added.
-        node_save((object) $node);
-      }
-    }
-
-    // Tell user that replacement went successful.
-    drupal_set_message(
-      t(
-        'Added term reference "@replace_name" to all nodes referencing to the deleted term.',
-        array(
-          '@replace_name' => $form_state['values']['replacement_term'],
-        )
-      )
-    );
+    // Merge.
+    term_delete_replace_merge($form['#term']->tid, $dest_tid);
+  }
+  else {
+    // Continue as the confirm deletion form would normally.
+    taxonomy_term_confirm_delete_submit($form, $form_state);
   }
 }
 
 /**
- * Autocomplete function for the replacement term textfield.
+ *  Merge source terms into one destination term.
+ * @param $source
+ *    A single term tid or an array of term tids to be merged.
+ * @param $dest
+ *    The tid of the term to merge sources into.
  */
-function term_delete_replace_term_autocomplete($vid, $deleted_term_name, $typed) {
+function term_delete_replace_merge($source, $dest) {
+  // Create an array of srouce if it isn't already one.
+  if (!is_array($source)) {
+    $source = array($source);
+  }
+
+  // Create a sceleton for the merging batch.
+  $update_batch = array(
+    'title' => t('Merging terms'),
+    'operations' => array(),
+    'finished' => '_term_delete_replace_merge_finished',
+  );
+
+  // For every field existing on the site.
+  foreach (field_info_fields() as $key => $field) {
+
+    if ($field['type'] == 'taxonomy_term_reference') {
+      $table_name = 'field_data_' . $key;
+      $tid_field = $key . '_tid';
+
+      $update_data = array();
+      foreach ($source as $source_tid) {
+
+        // Get data from fields previously containing a reference to the deleted term.
+        $fields_result = db_select($table_name, 'df')
+          ->fields('df', array('entity_type', 'entity_id', 'delta'))
+          ->condition($tid_field, $source_tid)
+          ->execute();
+
+        // Collect update data form the batch process and group them by their entity.
+        foreach ($fields_result as $field_row) {
+          $batch_key = $field_row->entity_type . '_' . $field_row->entity_id;
+          $update_data[$batch_key][] = array(
+            'field_name' => $key,
+            'delta' => $field_row->delta,
+            'tid' => $dest,
+          );
+        }
+      }
+
+      // Create a batch processing step for every entity that needs an update.
+      foreach ($update_data as $key => $batch_data) {
+        $delimiter_pos = strripos($key, '_');
+        $type = drupal_substr($key, 0, $delimiter_pos);
+        $id = drupal_substr($key, $delimiter_pos + 1);
+
+        $batch_data = array(
+          'entity_type' => $type,
+          'entity_id' => $id,
+          'data' => $batch_data
+        );
+        $update_batch['operations'][] = array(
+          '_term_delete_replace_merge_insert_field_values',
+          array($batch_data)
+        );
+      }
+    }
+  }
+
+  // Save the array of terms that are being merged for deletion on batch process completion.
+  $_SESSION['term_delete_replace_merged_terms'] = $source;
+
+  // Initialize the batch process.
+  batch_set($update_batch);
+}
+
+/**
+ *  Loads the entity specified in $update_data and add the term reference
+ *  to all fields specified in $update_data['data'].
+ */
+function _term_delete_replace_merge_insert_field_values($update_data, &$context) {
+  // Extract entity information.
+  $entity_type = $update_data['entity_type'];
+  $entity_id = $update_data['entity_id'];
+
+  // Load the entity.
+  $entity = entity_load($entity_type, array($entity_id));
+  $entity = $entity[$entity_id];
+
+  // For every field that's affected.
+  foreach ($update_data['data'] as $i => &$update_data_arr) {
+
+    // Reverse the fields so that the highest delta comes first.
+    // This way they will be spliced into the correct position.
+    $update_data_arr = array_reverse($update_data_arr);
+
+    // Get all language arrays for the entity fields.
+    $entity_field_langs = &$entity->{$update_data_arr['field_name']};
+
+    // For each language array in the field.
+    foreach ($entity_field_langs as &$entity_field_lang_values) {
+
+      // Insert the new field value at it's correct position.
+      array_splice(
+        $entity_field_lang_values,
+        $update_data_arr['delta'], 0,
+        array(array('tid' => $update_data_arr['tid']))
+      );
+
+    }
+
+    $context['results'][] = 'Added term with tid ' . $update_data_arr['tid'] . ' to field ' . $update_data_arr['field_name'] . ' in ' . $entity_type . ' ' . $entity_id;
+  }
+
+  // Save the new field values.
+  field_attach_update($entity_type, $entity);
+}
+
+function _term_delete_replace_merge_finished($success, $results, $operations) {
+  if ($success) {
+    $message = format_plural(count($results), 'Merged one occurancy.', '@count occurrancies merged.');
+  }
+  else {
+    $message = t('Finished with an error.');
+  }
+  drupal_set_message($message);
+
+  // Delete merged terms on success. We don't want to do this earlies if something went wrong on the update stage.
+  if ($success) {
+    foreach ($_SESSION['term_delete_replace_merged_terms'] as $merged_term) {
+      taxonomy_term_delete($merged_term);
+    }
+  }
+}
+
+/**
+ *  Returns values for the replacement_term select box in the form (see form builder at top).
+ *  Don't return the value for the term that will be deleted.
+ */
+function _term_delete_form_replacement_term_options($vid, $deleted_term_tid) {
   $tree = taxonomy_get_tree($vid);
-  $output = array();
-
-
+  $options = array('create_replace_new_8563' => '<--- ' . t('New term, specified below') . ' --->');
   foreach ($tree as $i => $term) {
-    $term_name = $term->name;
-
-    /*
-     * Check if the current term contains the characters it should.
-     * Also check to see that the current term isn't the same as the deleted one, we dont't want that one.
-     */
-    if (strpos(drupal_strtolower($term_name), drupal_strtolower($typed)) !== FALSE && $term_name != $deleted_term_name) {
-      // Term names containing commas or quotes must be wrapped in quotes.
-      if (strpos($term_name, ',') !== FALSE || strpos($term_name, '"') !== FALSE) {
-        $term_name = '"' . str_replace('"', '""', $term_name) . '"';
-      }
-      $output[$term_name] = $term_name;
+    if ($deleted_term_tid != $term->tid) {
+      $options[$term->tid] = $term->name;
     }
   }
 
-  drupal_json_output($output);
+  return $options;
 }
+
 
 /**
- * Helper function getting the vocabulary fields containing the term with specified tid.
+ *  Add nessesary javascript and css to the form.
  */
-function _term_delete_replace_get_vocabulary_fields($node, $tid) {
-  $fields = array();
-  foreach ($node as $key => $item) {
-    if (is_array($item) && isset($item[$node->language])) {
-      foreach ($item[$node->language] as $fieldValue) {
-        if (isset($fieldValue['tid']) && $fieldValue['tid'] == $tid) {
-          $fields[] = $key;
-        }
-      }
-    }
-  }
-  return $fields;
-}
+function _term_delete_replace_form_attach($form_element) {
+  drupal_add_js(drupal_get_path('module', 'term_delete_replace') . '/term_delete_replace.js');
+  drupal_add_css(drupal_get_path('module', 'term_delete_replace') . '/term_delete_replace.css');
 
+  return $form_element;
+}

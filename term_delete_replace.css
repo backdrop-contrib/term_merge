@@ -1,0 +1,18 @@
+#taxonomy-form-term div.form-item-replacement-term-replace {
+  margin-top: 20px;
+}
+
+#taxonomy-form-term div.form-item-replacement-term,
+#taxonomy-form-term div.form-item-replacement-term-replace {
+  display: inline;
+}
+
+#taxonomy-form-term div.form-item-replacement-term.disabled,
+#taxonomy-form-term div.form-item-replacement-term-new.disabled {
+  opacity: 0.5;
+}
+
+#edit-replacement-term option.new-term {
+  font-style: italic;
+  margin-bottom: 5px;
+}

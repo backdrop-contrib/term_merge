@@ -150,6 +150,7 @@ function term_delete_replace_merge($source, $dest) {
         $batch_data = array(
           'entity_type' => $type,
           'entity_id' => $id,
+          'merged_tid' => $source_tid,
           'data' => $batch_data
         );
         $update_batch['operations'][] = array(
@@ -159,9 +160,6 @@ function term_delete_replace_merge($source, $dest) {
       }
     }
   }
-
-  // Save the array of terms that are being merged for deletion on batch process completion.
-  $_SESSION['term_delete_replace_merged_terms'] = $source;
 
   // Initialize the batch process.
   batch_set($update_batch);
@@ -213,6 +211,10 @@ function _term_delete_replace_merge_insert_field_values($update_data, &$context)
 
     }
 
+    if (array_search($update_data['merged_tid'], $context['results']['merged_terms']) === FALSE) {
+      $context['results']['merged_terms'][] = $update_data['merged_tid'];
+    }
+
     $context['results'][] = 'Added term with tid ' . $update_data_arr['tid'] . ' to field ' . $update_data_arr['field_name'] . ' in ' . $entity_type . ' ' . $entity_id;
   }
 
@@ -222,16 +224,16 @@ function _term_delete_replace_merge_insert_field_values($update_data, &$context)
 
 function _term_delete_replace_merge_finished($success, $results, $operations) {
   if ($success) {
-    $message = format_plural(count($results), 'Merged one occurancy.', '@count occurrancies merged.');
+    $message = format_plural(max(0, count($results) - 1), 'Merged one occurrance.', '@count occurrancies merged.');
   }
   else {
     $message = t('Finished with an error.');
   }
   drupal_set_message($message);
 
-  // Delete merged terms on success. We don't want to do this earlies if something went wrong on the update stage.
+  // Delete merged terms on success. We don't want to do this earlier if something went wrong during the batch process.
   if ($success) {
-    foreach ($_SESSION['term_delete_replace_merged_terms'] as $merged_term) {
+    foreach ($results['merged_terms'] as $merged_term) {
       taxonomy_term_delete($merged_term);
     }
   }

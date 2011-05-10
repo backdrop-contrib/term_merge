@@ -37,13 +37,13 @@ function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state,
 }
 
 /**
- * Implements hook_form_validate().
+ * Validation function for override of form_taxonomy_form_term (see above).
  *
  * Checks to see if I've entered a name for the new term if
  * the user wants to create a new term to merge with.
  */
 function term_delete_replace_form_taxonomy_form_term_validate($form, &$form_state) {
-  if ($form_state['values']['replacement_term'] == 'create_replace_new_8563' &&
+  if ($form_state['values']['replacement_term'] == '0' &&
       empty($form_state['values']['replacement_term_new'])) {
 
     form_set_error('replacement_term_new', t('You must enter a name for the new term.'));
@@ -51,7 +51,7 @@ function term_delete_replace_form_taxonomy_form_term_validate($form, &$form_stat
 }
 
 /**
- * Implements hook_form_submit();
+ * Submit function for override of form_taxonomy_form_term (see above).
  *
  * If the user choose to create a new tid for merging, create and save a term with the entered name.
  * Call the merge function to merge the replacement term into the deleted term.
@@ -61,7 +61,7 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
 
     $replacement_term = $form_state['values']['replacement_term'];
     // Create a new tid.
-    if ($replacement_term == 'create_replace_new_8563') {
+    if ($replacement_term == '0') {
 
       // get parent of deleted term.
       $deleted_parent_result = db_select('taxonomy_term_hierarchy', 'tth')
@@ -102,12 +102,12 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
  *    The tid of the term to merge sources into.
  */
 function term_delete_replace_merge($source, $dest) {
-  // Create an array of srouce if it isn't already one.
+  // Create an array of source if it isn't already one.
   if (!is_array($source)) {
     $source = array($source);
   }
 
-  // Create a sceleton for the merging batch.
+  // Create a skeleton for the merging batch.
   $update_batch = array(
     'title' => t('Merging terms'),
     'operations' => array(),
@@ -166,6 +166,8 @@ function term_delete_replace_merge($source, $dest) {
 }
 
 /**
+ *  Batch operation for adding field values into entities.
+ *
  *  Loads the entity specified in $update_data and add the term reference
  *  to all fields specified in $update_data['data'].
  */
@@ -224,7 +226,7 @@ function _term_delete_replace_merge_insert_field_values($update_data, &$context)
 
 function _term_delete_replace_merge_finished($success, $results, $operations) {
   if ($success) {
-    $message = format_plural(max(0, count($results) - 1), 'Merged one occurrance.', '@count occurrancies merged.');
+    $message = format_plural(max(0, count($results) - 1), 'Merged one occurrence.', '@count occurrences merged.');
   }
   else {
     $message = t('Finished with an error.');
@@ -245,19 +247,20 @@ function _term_delete_replace_merge_finished($success, $results, $operations) {
  */
 function _term_delete_form_replacement_term_options($vid, $deleted_term_tid) {
   $tree = taxonomy_get_tree($vid);
-  $options = array('create_replace_new_8563' => '<--- ' . t('New term, specified below') . ' --->');
   foreach ($tree as $i => $term) {
     if ($deleted_term_tid != $term->tid) {
       $options[$term->tid] = $term->name;
     }
   }
 
+  $options['0'] = t('New term, specified below');
+
   return $options;
 }
 
 
 /**
- *  Add nessesary javascript and css to the form.
+ *  Add necessary JavaScript and css to the form.
  */
 function _term_delete_replace_form_attach($form_element) {
   drupal_add_js(drupal_get_path('module', 'term_delete_replace') . '/term_delete_replace.js');

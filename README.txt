@@ -11,9 +11,14 @@ or different users simply making up synonymous terms as they go.
 
 You, as an administrator, may then want to correct such errors or unify
 synonymous terms, thereby pruning the taxonomy to a more manageable set.
+This module allows you to merge multiple terms into one and at the same
+time update all fields referencing the merged terms so they instead
+reference to the replacement term.
+
 This module allows you to automatically replace references to a particilar
 taxonomy term with another term when the former term is being deleted.
 
 Installation
 ------------
  * Copy the module's directory to your modules directory and activate the module.
+

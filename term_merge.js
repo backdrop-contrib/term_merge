@@ -3,35 +3,37 @@ Drupal.behaviors.term_merge = {
 
     (function ($) {
 
-      //function setFormState() {
-      //  if (!$('#edit-replacement-term-replace').is(':checked')) {
-      //    setElementEnabledState($('#edit-replacement-term'), false);
-      //    setElementEnabledState($('#edit-replacement-term-new'), false);
-      //  } else if ($('#edit-replacement-term').val() != '0') {
-      //    setElementEnabledState($('#edit-replacement-term'), true);
-      //    setElementEnabledState($('#edit-replacement-term-new'), false);
-      //  } else {
-      //    setElementEnabledState($('#edit-replacement-term'), true);
-      //    setElementEnabledState($('#edit-replacement-term-new'), true);
-      //  }
-      //}
-      //
-      //function setElementEnabledState($element, enabled) {
-      //  if (enabled) {
-      //    $element.removeAttr('disabled');
-      //    $element.parents('div.form-item').removeClass('disabled');
-      //  } else {
-      //    $element.attr('disabled', true);
-      //    $element.parents('div.form-item').addClass('disabled');
-      //  }
-      //}
-      //
-      //setFormState();
-      //$('#edit-replacement-term-replace').bind('click.replacement-term-replace', setFormState);
-      //$('#edit-replacement-term').bind('change.replacement-term', setFormState);
-      //
-      //var $createOption = $('#edit-replacement-term option:last');
-      //$createOption.addClass('new-term');
+      function setFormState() {
+        //alert($('#edit-term-list').val() != null);
+
+        if ($('#edit-term-list').val() == null) {
+          setElementEnabledState($('#edit-replacement-term'), false);
+          setElementEnabledState($('#edit-replacement-term-new'), false);
+        } else if ($('#edit-replacement-term').val() != '0') {
+          setElementEnabledState($('#edit-replacement-term'), true);
+          setElementEnabledState($('#edit-replacement-term-new'), false);
+        } else {
+          setElementEnabledState($('#edit-replacement-term'), true);
+          setElementEnabledState($('#edit-replacement-term-new'), true);
+        }
+      }
+
+      function setElementEnabledState($element, enabled) {
+        if (enabled) {
+          $element.removeAttr('disabled');
+          $element.parents('div.form-item').removeClass('disabled');
+        } else {
+          $element.attr('disabled', true);
+          $element.parents('div.form-item').addClass('disabled');
+        }
+      }
+
+      setFormState();
+      $('#edit-term-list').bind('click', setFormState);
+      $('#edit-replacement-term').bind('change', setFormState);
+
+      var $createOption = $('#edit-replacement-term option:last');
+      $createOption.addClass('new-term');
 
     })(jQuery);
 

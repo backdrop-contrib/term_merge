@@ -38,7 +38,7 @@ function term_merge_form_taxonomy_overview_terms_alter(&$form, &$form_state, $fo
   $form['actions'][] = array(
     'merge' => array(
       '#type' => 'submit',
-      '#value' => t('Merge terms'),
+      '#value' => t('Merge'),
       '#submit' => array('term_merge_form_taxonomy_overview_terms_merge_submit'),
       '#weight' => 1,
     )
@@ -67,18 +67,17 @@ function term_merge_term_merge_form($form, $form_state, $vid) {
   $form = array(
     'term_list' => array(
       '#type' => 'select',
-      '#title' => t('Vocabulary terms'),
-      //'#description' => t('Select the terms in the list that you want to merge.'),
+      '#title' => t('Merge terms'),
       '#options' => _term_delete_form_replacement_term_options($vid, 0),
       '#multiple' => TRUE,
       '#required' => TRUE,
       '#attributes' => array('size' => 15),
-      '#prefix' => '<div class="terms-selector">',
+      '#prefix' => '<div class="merge-container clearfix"><div class="terms-selector">',
     ),
 
     'replacement_term' => array(
       '#type' => 'select',
-      '#title' => t('Merge selected into'),
+      '#title' => t('Into'),
       '#description' => t('Cannot be any of the terms selected in the list to the left.'),
       '#options' => _term_delete_form_replacement_term_options($vid, 0),
       '#prefix' => '</div><div class="merge-selectors">',
@@ -87,13 +86,14 @@ function term_merge_term_merge_form($form, $form_state, $vid) {
     'replacement_term_new' => array(
       '#type' => 'textfield',
       '#title' => t('Name of new term'),
-      '#suffix' => '</div>',
+      '#description' => t('A new term will be created with the specified name.'),
+      '#suffix' => '</div></div>',
     ),
 
     'actions' => array(
       'submit' => array(
         '#type' => 'submit',
-        '#value' => t('Merge terms'),
+        '#value' => t('Merge'),
       )
     )
   );
@@ -138,7 +138,7 @@ function term_merge_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id
       '#title' => t('Name of new term'),
     );
 
-    $form['#after_build'] = array('_term_merge_form_delete_attach');
+    $form['#after_build'] = array('_term_merge_form_attach');
 
     $form['#submit'] = array('term_merge_form_taxonomy_form_term_submit');
     $form['#validate'] = array('term_merge_form_taxonomy_form_term_validate');
@@ -370,19 +370,18 @@ function _term_delete_form_replacement_term_options($vid, $deleted_term_tid) {
 
 
 /**
- *
- */
-function _term_merge_form_attach($form_element) {
-
-  return $form_element;
-}
-
-/**
  *  Add necessary JavaScript and css to the form.
  */
-function _term_merge_form_delete_attach($form_element) {
-  drupal_add_js(drupal_get_path('module', 'term_merge') . '/term_merge.js');
+function _term_merge_form_attach($form_element) {
+  if ($form_element['#id'] == 'term-merge-term-merge-form') {
+    drupal_add_js(drupal_get_path('module', 'term_merge') . '/term_merge.js');
+  }
+  else if ($form_element['#id'] == 'taxonomy-form-term') {
+    drupal_add_js(drupal_get_path('module', 'term_merge') . '/term_merge_deletion.js');
+  }
+
   drupal_add_css(drupal_get_path('module', 'term_merge') . '/term_merge.css');
 
   return $form_element;
 }
+

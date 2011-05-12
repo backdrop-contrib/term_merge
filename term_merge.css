@@ -1,3 +1,23 @@
+#term-merge-term-merge-form div.terms-selector {
+    float: left;
+}
+
+#term-merge-term-merge-form div.terms-selector select {
+    min-width: 200px;
+    max-width: 300px;
+}
+
+#term-merge-term-merge-form div.merge-selectors {
+    float: left;
+    margin-left: 25px;
+}
+
+#term-merge-term-merge-form input.form-submit {
+    clear: both;
+}
+
+
+
 #taxonomy-form-term div.form-item-replacement-term-replace {
   margin-top: 20px;
 }
@@ -11,6 +31,8 @@
 #taxonomy-form-term div.form-item-replacement-term-new.disabled {
   opacity: 0.5;
 }
+
+
 
 #edit-replacement-term option.new-term {
   font-style: italic;

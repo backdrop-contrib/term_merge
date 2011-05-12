@@ -3,7 +3,7 @@
 /**
  *  Implementation of hook_permission():
  */
-function term_delete_replace_permission() {
+function term_merge_permission() {
   return array(
     'merge terms' => array(
       'title' => t('Merge terms'),
@@ -15,12 +15,12 @@ function term_delete_replace_permission() {
 /**
  *  Implements hook_menu():
  */
-function term_delete_replace_menu() {
+function term_merge_menu() {
   $items = array(
     'admin/structure/taxonomy/merge/%' => array(
       'title' => 'Term merge',
       'page callback' => 'drupal_get_form',
-      'page arguments' => array('term_delete_replace_term_merge_form', 4),
+      'page arguments' => array('term_merge_term_merge_form', 4),
       'access arguments' => array('term merge'),
       'type' => MENU_CALLBACK,
     )
@@ -34,12 +34,12 @@ function term_delete_replace_menu() {
  *
  *  Inserts the Merge button into the actions area of the form.
  */
-function term_delete_replace_form_taxonomy_overview_terms_alter(&$form, &$form_state, $form_id) {
+function term_merge_form_taxonomy_overview_terms_alter(&$form, &$form_state, $form_id) {
   $form['actions'][] = array(
     'merge' => array(
       '#type' => 'submit',
       '#value' => t('Merge terms'),
-      '#submit' => array('term_delete_replace_form_taxonomy_overview_terms_merge_submit'),
+      '#submit' => array('term_merge_form_taxonomy_overview_terms_merge_submit'),
       '#weight' => 1,
     )
   );
@@ -53,7 +53,7 @@ function term_delete_replace_form_taxonomy_overview_terms_alter(&$form, &$form_s
  *  Submit function for the merge button in the alteration of form form_taxonomy_overview_terms, see above.
  *  Redirect user to the term merge form.
  */
-function term_delete_replace_form_taxonomy_overview_terms_merge_submit($form, &$form_state) {
+function term_merge_form_taxonomy_overview_terms_merge_submit($form, &$form_state) {
   unset($form_state['storage']);
   $form_state['redirect'] = 'admin/structure/taxonomy/merge/' . $form['#vocabulary']->vid;
 }
@@ -63,7 +63,7 @@ function term_delete_replace_form_taxonomy_overview_terms_merge_submit($form, &$
  *
  *  Menu callback; displays a form with all terms available for merging.
  */
-function term_delete_replace_term_merge_form($form, $form_state, $vid) {
+function term_merge_term_merge_form($form, $form_state, $vid) {
   $form = array(
     'term_list' => array(
       '#type' => 'select',
@@ -98,15 +98,15 @@ function term_delete_replace_term_merge_form($form, $form_state, $vid) {
     )
   );
 
-  $form['#after_build'] = array('_term_delete_replace_form_attach');
+  $form['#after_build'] = array('_term_merge_form_attach');
 
   return $form;
 }
 
 /**
- *  Submit handler for term_delete_replace_term_merge_form().
+ *  Submit handler for term_merge_term_merge_form().
  */
-function term_delete_replace_term_merge_form_submit($form, &$form_state) {
+function term_merge_term_merge_form_submit($form, &$form_state) {
 
 }
 
@@ -115,7 +115,7 @@ function term_delete_replace_term_merge_form_submit($form, &$form_state) {
  *
  * Add fields for term merging on the confirm deletion state of the form.
  */
-function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id) {
+function term_merge_form_taxonomy_form_term_alter(&$form, &$form_state, $form_id) {
   // Only modify the form if it is in the "Confirm Delete" states.
   if (isset($form_state['confirm_delete']) && $form_state['confirm_delete'] === TRUE) {
 
@@ -138,10 +138,10 @@ function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state,
       '#title' => t('Name of new term'),
     );
 
-    $form['#after_build'] = array('_term_delete_replace_form_delete_attach');
+    $form['#after_build'] = array('_term_merge_form_delete_attach');
 
-    $form['#submit'] = array('term_delete_replace_form_taxonomy_form_term_submit');
-    $form['#validate'] = array('term_delete_replace_form_taxonomy_form_term_validate');
+    $form['#submit'] = array('term_merge_form_taxonomy_form_term_submit');
+    $form['#validate'] = array('term_merge_form_taxonomy_form_term_validate');
   }
 }
 
@@ -151,7 +151,7 @@ function term_delete_replace_form_taxonomy_form_term_alter(&$form, &$form_state,
  * Checks to see if I've entered a name for the new term if
  * the user wants to create a new term to merge with.
  */
-function term_delete_replace_form_taxonomy_form_term_validate($form, &$form_state) {
+function term_merge_form_taxonomy_form_term_validate($form, &$form_state) {
   if ($form_state['values']['replacement_term'] == '0' &&
       empty($form_state['values']['replacement_term_new'])) {
 
@@ -165,7 +165,7 @@ function term_delete_replace_form_taxonomy_form_term_validate($form, &$form_stat
  * If the user choose to create a new tid for merging, create and save a term with the entered name.
  * Call the merge function to merge the replacement term into the deleted term.
  */
-function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state) {
+function term_merge_form_taxonomy_form_term_submit($form, &$form_state) {
   if ($form_state['values']['replacement_term_replace']) {
 
     $replacement_term = $form_state['values']['replacement_term'];
@@ -195,7 +195,7 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
     }
 
     // Merge.
-    term_delete_replace_merge($form['#term']->tid, $dest_tid);
+    term_merge_merge($form['#term']->tid, $dest_tid);
   }
   else {
     // Continue as the confirm deletion form would normally.
@@ -211,7 +211,7 @@ function term_delete_replace_form_taxonomy_form_term_submit($form, &$form_state)
  * @param $dest
  *    The tid of the term to merge sources into.
  */
-function term_delete_replace_merge($source, $dest) {
+function term_merge_merge($source, $dest) {
   // Create an array of source if it isn't already one.
   if (!is_array($source)) {
     $source = array($source);
@@ -221,7 +221,7 @@ function term_delete_replace_merge($source, $dest) {
   $update_batch = array(
     'title' => t('Merging terms'),
     'operations' => array(),
-    'finished' => '_term_delete_replace_merge_finished',
+    'finished' => '_term_merge_merge_finished',
   );
 
 
@@ -265,7 +265,7 @@ function term_delete_replace_merge($source, $dest) {
           'data' => $batch_data
         );
         $update_batch['operations'][] = array(
-          '_term_delete_replace_merge_insert_field_values',
+          '_term_merge_merge_insert_field_values',
           array($batch_data)
         );
       }
@@ -282,7 +282,7 @@ function term_delete_replace_merge($source, $dest) {
  *  Loads the entity specified in $update_data and add the term reference
  *  to all fields specified in $update_data['data'].
  */
-function _term_delete_replace_merge_insert_field_values($update_data, &$context) {
+function _term_merge_merge_insert_field_values($update_data, &$context) {
   // Extract entity information.
   $entity_type = $update_data['entity_type'];
   $entity_id = $update_data['entity_id'];
@@ -334,7 +334,7 @@ function _term_delete_replace_merge_insert_field_values($update_data, &$context)
   field_attach_update($entity_type, $entity);
 }
 
-function _term_delete_replace_merge_finished($success, $results, $operations) {
+function _term_merge_merge_finished($success, $results, $operations) {
   if ($success) {
     $message = format_plural(max(0, count($results) - 1), 'Merged one occurrence.', '@count occurrences merged.');
   }
@@ -372,7 +372,7 @@ function _term_delete_form_replacement_term_options($vid, $deleted_term_tid) {
 /**
  *
  */
-function _term_delete_replace_form_attach($form_element) {
+function _term_merge_form_attach($form_element) {
 
   return $form_element;
 }
@@ -380,9 +380,9 @@ function _term_delete_replace_form_attach($form_element) {
 /**
  *  Add necessary JavaScript and css to the form.
  */
-function _term_delete_replace_form_delete_attach($form_element) {
-  drupal_add_js(drupal_get_path('module', 'term_delete_replace') . '/term_delete_replace.js');
-  drupal_add_css(drupal_get_path('module', 'term_delete_replace') . '/term_delete_replace.css');
+function _term_merge_form_delete_attach($form_element) {
+  drupal_add_js(drupal_get_path('module', 'term_merge') . '/term_merge.js');
+  drupal_add_css(drupal_get_path('module', 'term_merge') . '/term_merge.css');
 
   return $form_element;
 }

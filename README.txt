@@ -1,6 +1,6 @@
-Term Delete Replace
+Term Merge
 ------------------------
-by Max Nylin, max@articstudios.se
+by Max Nylin, max@articstudios.se.
 
 
 Description
@@ -14,6 +14,6 @@ synonymous terms, thereby pruning the taxonomy to a more manageable set.
 This module allows you to automatically replace references to a particilar
 taxonomy term with another term when the former term is being deleted.
 
-Installation 
+Installation
 ------------
  * Copy the module's directory to your modules directory and activate the module.

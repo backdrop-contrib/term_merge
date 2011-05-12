@@ -1,7 +1,6 @@
-name = Term delete replace
+name = Term merge
 description = Allows you to automatically replace references to a particular taxonomy term with another term when the former term is being deleted.
-package = Utilities
+package = Taxonomy
 core = 7.x
- 
-files[] = term_delete_replace.module
 
+files[] = term_merge.module

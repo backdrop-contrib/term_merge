@@ -1,4 +1,4 @@
-Drupal.behaviors.term_detelte_replace = {
+Drupal.behaviors.term_merge_delete_deletion = {
   attach: function(context, settings) {
 
     (function ($) {

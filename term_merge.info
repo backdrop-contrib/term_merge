@@ -1,7 +1,6 @@
 name = Term merge
-description = Allows you to merge multiple terms into one and at the same time update all fields referencing the merged terms so they instead reference to the replacement term.
+description = This module allows you to merge multiple terms into one, while updating all fields referring to those terms to refer to the replacement term instead.
 package = Taxonomy
 core = 7.x
 
 files[] = term_merge.module
-

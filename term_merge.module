@@ -172,7 +172,7 @@ function term_merge_term_merge_form_submit($form, &$form_state) {
     $dest_tid = $replacement_term;
   }
 
-  // Redirect user after marge.
+  // Redirect user after merge.
   $form_state['redirect'] = $form_values['merge_redirect_path'];
 
   // Now merge.
@@ -270,7 +270,7 @@ function term_merge($source, $dest) {
   if (!is_array($source)) {
     $source = array($source);
   }
-  //$source = array_values($source);
+  $source = array_values($source);
 
   // Create a skeleton for the merging batch.
   $update_batch = array(
@@ -300,9 +300,9 @@ function term_merge($source, $dest) {
           $batch_key = $field_row->entity_type . '_' . $field_row->entity_id;
           $update_data[$batch_key][] = array(
             'field_name' => $key,
-            'delta' => $field_row->delta,
-            'tid' => $dest,
-            'merged_tid' => $source_tid,
+            'source_tid' => $source_tid,
+            'dest_tid' => $dest,
+            //'merged_tid' => $source_tid,
           );
         }
       }
@@ -316,7 +316,6 @@ function term_merge($source, $dest) {
         $batch_data = array(
           'entity_type' => $type,
           'entity_id' => $id,
-          //'merged_tid' => $source_tid,
           'data' => $batch_data
         );
         $update_batch['operations'][] = array(
@@ -342,7 +341,7 @@ function _term_merge_term_create($name, $vocabulary, $merged_terms) {
     $merged_terms = array(0 => $merged_terms);
   }
 
-  // get parent of merged terms.
+  // Get parent of merged terms.
   $merged_parent_query = db_select('taxonomy_term_hierarchy', 'tth')
     ->fields('tth', array('parent'));
   $conditions = db_or();
@@ -393,39 +392,41 @@ function _term_merge_insert_field_values($update_data, &$context) {
   $entity = entity_load($entity_type, array($entity_id));
   $entity = $entity[$entity_id];
 
-  // For every field that's affected.
+  $target_merged = FALSE;
   foreach ($update_data['data'] as $i => &$update_data_arr) {
-
-    // Reverse the fields so that the highest delta comes first.
-    // This way they will be spliced into the correct position.
     $update_data_arr = array_reverse($update_data_arr);
 
-    // Get all language arrays for the entity fields.
-    $entity_field_langs = &$entity->{$update_data_arr['field_name']};
+    $field_values = &$entity->{$update_data_arr['field_name']}[LANGUAGE_NONE];
+    foreach ($field_values as $i => $value) {
+      if ($value['tid'] == $update_data_arr['source_tid']) {
 
-    // For each language array in the field.
-    foreach ($entity_field_langs as &$entity_field_lang_values) {
-
-      // See if the replacement term already exists in the field.
-      $exist = FALSE;
-      foreach ($entity_field_lang_values as $value) {
-        if ($value['tid'] == $update_data_arr['tid']) {
-          $exist = TRUE;
-          break;
+        if (!$target_merged) {
+          $field_values[$i]['tid'] = $update_data_arr['dest_tid'];
+          $target_merged = TRUE;
         }
-      }
+        // Any more accurances of the source tid will simply be removed.
+        // We don't wan't duplicates.
+        else {
+          array_splice($field_values, $i, 1);
+        }
 
-      // Insert the new field value at it's correct position if the replacement tid doesn't already exist.
-      if (!$exist) {
-        array_splice(
-          $entity_field_lang_values,
-          $update_data_arr['delta'], 0,
-            array(array('tid' => $update_data_arr['tid']))
-        );
+        // If target tid is one of the source tids, remove it from the array
+        // of terms that will be removed at the end of the process.
+        if($update_data_arr['source_tid']== $update_data_arr['dest_tid']) {
+          foreach ($context['results']['merged_terms'] as $i => $merged_term) {
+            if ($merged_term == $update_data_arr['source_tid']) {
+              array_splice($context['results']['merged_terms'], $i, 1);
+            }
+          }
+        }
+
+        break;
       }
     }
 
-    $context['results'][] = 'Added term with tid ' . $update_data_arr['tid'] . ' to field ' . $update_data_arr['field_name'] . ' in ' . $entity_type . ' ' . $entity_id;
+    $context['results'][] = 'Merged ' . $update_data_arr['source_tid'] . ' with '
+      . $update_data_arr['dest_tid'] . ' in ' . $update_data_arr['field_name']
+      . ' of ' . $entity_type . ' ' . $entity_id;
   }
 
   // Save the new field values.
@@ -487,4 +488,3 @@ function _term_merge_form_attach($form_element) {
 
   return $form_element;
 }
-

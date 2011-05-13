@@ -29,7 +29,7 @@ Drupal.behaviors.term_merge = {
       }
 
       setFormState();
-      $('#edit-term-list').bind('click', setFormState);
+      $('#edit-term-list').bind('change', setFormState);
       $('#edit-replacement-term').bind('change', setFormState);
 
       var $createOption = $('#edit-replacement-term option:last');

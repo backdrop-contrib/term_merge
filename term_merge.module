@@ -487,4 +487,3 @@ function _term_merge_form_attach($form_element) {
 
   return $form_element;
 }
-

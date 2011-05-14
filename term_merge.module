@@ -312,7 +312,12 @@ function term_merge($source, $dest, $keep_merged) {
   // Create a skeleton for the merging batch.
   $update_batch = array(
     'title' => t('Merging terms'),
-    'operations' => array(array('_term_merge_batch_store_merged_terms', array($keep_merged ? array() : $source))),
+    'operations' => array(
+      array('_term_merge_batch_store_merged_terms', array(
+        $keep_merged ? array() : $source,
+        count($source),
+      ))
+    ),
     'finished' => '_term_merge_finished',
   );
 
@@ -409,8 +414,9 @@ function _term_merge_term_create($name, $vocabulary, $merged_terms) {
  *  Stores the merged terms in the context of the batch operation,
  *  I need them in the finish function of the batch operation.
  */
-function _term_merge_batch_store_merged_terms($merged_terms, &$context) {
-  $context['results']['merged_terms'] = $merged_terms;
+function _term_merge_batch_store_merged_terms($merged_terms_delete, $num_merged_terms, &$context) {
+  $context['results']['merged_terms_delete'] = $merged_terms_delete;
+  $context['results']['num_merged_terms'] = $num_merged_terms;
 }
 
 /**
@@ -449,20 +455,20 @@ function _term_merge_insert_field_values($update_data, &$context) {
         // If target tid is one of the source tids, remove it from the array
         // of terms that will be removed at the end of the process.
         if($update_data_arr['source_tid']== $update_data_arr['dest_tid']) {
-          foreach ($context['results']['merged_terms'] as $i => $merged_term) {
+          foreach ($context['results']['merged_terms_delete'] as $i => $merged_term) {
             if ($merged_term == $update_data_arr['source_tid']) {
-              array_splice($context['results']['merged_terms'], $i, 1);
+              array_splice($context['results']['merged_terms_delete'], $i, 1);
             }
           }
         }
 
+        $context['results'][] = 'Merged ' . $update_data_arr['source_tid'] . ' with '
+        . $update_data_arr['dest_tid'] . ' in ' . $update_data_arr['field_name']
+        . ' of ' . $entity_type . ' ' . $entity_id;
+
         break;
       }
     }
-
-    $context['results'][] = 'Merged ' . $update_data_arr['source_tid'] . ' with '
-      . $update_data_arr['dest_tid'] . ' in ' . $update_data_arr['field_name']
-      . ' of ' . $entity_type . ' ' . $entity_id;
   }
 
   // Save the new field values.
@@ -474,7 +480,13 @@ function _term_merge_insert_field_values($update_data, &$context) {
  */
 function _term_merge_finished($success, $results, $operations) {
   if ($success) {
-    $message = format_plural(max(0, count($results) - 1), 'Merged one occurrence.', 'Merged @count occurrences.');
+    $message = format_plural($results['num_merged_terms'], 'One term merged.', '@count terms merged.');
+    $message .= '<br />';
+    $message .= format_plural(count($results) - 2, 'One term occurrence merged.', '@count term occurrences merged.');
+    if (count($results['merged_terms_delete']) > 0) {
+      $message .= '<br />';
+      $message .= format_plural(count($results['merged_terms_delete']), 'One term deleted', '@count terms deleted.');
+    }
   }
   else {
     $message = t('Finished with an error.');
@@ -483,7 +495,7 @@ function _term_merge_finished($success, $results, $operations) {
 
   // Delete merged terms on success. We don't want to do this earlier if something went wrong during the batch process.
   if ($success) {
-    foreach ($results['merged_terms'] as $merged_term) {
+    foreach ($results['merged_terms_delete'] as $merged_term) {
       taxonomy_term_delete($merged_term);
     }
   }

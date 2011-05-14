@@ -20,7 +20,7 @@ function term_merge_permission() {
 function term_merge_menu() {
   $items = array(
     'admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/merge' => array(
-      'title' => 'Term merge',
+      'title' => 'Merge terms',
       'page callback' => 'drupal_get_form',
       'page arguments' => array('term_merge_term_merge_form', 3),
       'access arguments' => array('term merge'),
@@ -434,6 +434,8 @@ function _term_merge_insert_field_values($update_data, &$context) {
   $entity = entity_load($entity_type, array($entity_id));
   $entity = $entity[$entity_id];
 
+  $context['message'] = 'Merging terms in fields of ' . $entity_type . ' ' . $entity->title . '.';
+
   $target_merged = FALSE;
   foreach ($update_data['data'] as $i => &$update_data_arr) {
     $update_data_arr = array_reverse($update_data_arr);
@@ -471,8 +473,17 @@ function _term_merge_insert_field_values($update_data, &$context) {
     }
   }
 
-  // Save the new field values.
-  field_attach_update($entity_type, $entity);
+  if (empty($context['sandbox'])) {
+    $context['sandbox']['progress'] = 0;
+  }
+
+  $context['sandbox']['progress']++;
+  $context['finished'] = $context['sandbox']['progress']/$context['results']['num_merged_terms'];
+
+  // Save the new field values if something has changed.
+  if ($target_merged) {
+    field_attach_update($entity_type, $entity);
+  }
 }
 
 /**

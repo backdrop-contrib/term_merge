@@ -51,18 +51,19 @@ function term_merge_help($path, $arg) {
  *  Inserts the Merge button into the actions of the form.
  */
 function term_merge_form_taxonomy_overview_terms_alter(&$form, &$form_state, $form_id) {
-  $form['actions'][] = array(
-    'merge' => array(
-      '#type' => 'submit',
-      '#value' => t('Merge'),
-      '#submit' => array('term_merge_form_taxonomy_overview_terms_merge_submit'),
-      '#weight' => 1,
-    )
-  );
+  if ($form['#total_entries'] > 0) {
+    $form['actions'][] = array(
+      'merge' => array(
+        '#type' => 'submit',
+        '#value' => t('Merge'),
+        '#submit' => array('term_merge_form_taxonomy_overview_terms_merge_submit'),
+        '#weight' => 1,
+      )
+    );
 
-  $form['actions']['submit']['#weight'] = 0;
-  $form['actions']['reset_alphabetical']['#weight'] = 2;
-
+    $form['actions']['submit']['#weight'] = 0;
+    $form['actions']['reset_alphabetical']['#weight'] = 2;
+  }
 }
 
 /**

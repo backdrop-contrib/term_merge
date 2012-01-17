@@ -440,8 +440,9 @@ function _term_merge_insert_field_values($update_data, &$context) {
   $target_merged = FALSE;
   foreach ($update_data['data'] as $i => &$update_data_arr) {
     $update_data_arr = array_reverse($update_data_arr);
-
-    $field_values = &$entity->{$update_data_arr['field_name']}[LANGUAGE_NONE];
+		
+    $field_lang = field_language('node', $entity, $update_data_arr['field_name']);
+    $field_values = &$entity->{$update_data_arr['field_name']}[$field_lang];
     foreach ($field_values as $i => $value) {
       if ($value['tid'] == $update_data_arr['source_tid']) {
 

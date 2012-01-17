@@ -484,6 +484,7 @@ function _term_merge_insert_field_values($update_data, &$context) {
 
   // Save the new field values if something has changed.
   if ($target_merged) {
+    field_attach_presave($entity_type, $entity);
     field_attach_update($entity_type, $entity);
   }
 }

@@ -1,7 +1,8 @@
 Term Merge
 ------------------------
-by Max Nylin, max@articstudios.se.
-
+by:
+ * Max Nylin <max@articstudios.se>
+ * Oleksandr Trotsenko <oleksandr.trotsenko@gmail.com>
 
 Description
 -----------

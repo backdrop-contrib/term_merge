@@ -387,67 +387,8 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
       'field[cardinality]' => FIELD_CARDINALITY_UNLIMITED,
     ), 'Save settings');
 
-    drupal_static_reset();
-    $terms = array(
-      'parent' => FALSE,
-      'another_parent' => FALSE,
-      'child' => FALSE,
-      'term1' => FALSE,
-      'term2' => FALSE,
-      'term3' => FALSE,
-      'term_trunk_parent' => FALSE,
-    );
-
-    foreach ($terms as $term_type => $tmp) {
-      $url = 'admin/structure/taxonomy/vocabulary/add';
-      $edit = array(
-        'name' => $term_type . '_' . $this->randomName(),
-        'field_test_text[' . LANGUAGE_NONE . '][0][value]' => $term_type,
-      );
-
-      if ($term_type == 'child') {
-        $edit['parent[]'] = array($terms['parent']->tid, $terms['another_parent']->tid);
-      }
-
-      $this->drupalPost($url, $edit, 'Save');
-      $terms[$term_type] = $this->getLastTerm($this->vocabulary);
-    }
-
-    // Making sure children of selected branch terms are not available for
-    // merging into as trunk terms, nor as parent terms for creation of a new
-    // trunk term.
-    $this->drupalGet('admin/structure/taxonomy/vocabulary/merge');
-    $this->drupalPostAJAX(NULL, array(
-      'term_branch[]' => array($terms['parent']->tid),
-    ), 'term_branch[]');
-
-    $matches = array();
-    preg_match('#\<select[^>]+name="term_trunk\[select\]"[^>]*\>.+?\</select\>#si', $this->content, $matches);
-    $term_trunk_options = $matches[0];
-    $str_pos = strpos($term_trunk_options, $terms['child']->name);
-    $this->assertIdentical(FALSE, $str_pos, 'Child is not available as option for term trunk if its parent is chosen among term branches.');
-    $str_pos = strpos($term_trunk_options, $terms['parent']->name);
-    $this->assertIdentical(FALSE, $str_pos, 'Selected branch term is not available as an option for term trunk.');
-
-    // At the same time asserting if we choose "New Term" option, there are no
-    // children of the selected branch terms, nor the branch terms themselves.
-    $this->drupalPostAJAX(NULL, array(
-      'term_branch[]' => array($terms['parent']->tid),
-      'term_trunk[select]' => $new_term_tid,
-    ), 'term_trunk[select]');
-
-    $matches = array();
-    preg_match('#\<select[^>]+name="relations\[parent\]\[\]"[^>]*\>.+?\</select\>#si', $this->content, $matches);
-    $new_term_parent_options = $matches[0];
-    $str_pos = strpos($new_term_parent_options, $terms['child']->name);
-    $this->assertIdentical(FALSE, $str_pos, 'Child is not available as option for parent term for a new term trunk if its parent is chosen among term branches.');
-    $str_pos = strpos($new_term_parent_options, $terms['parent']->name);
-    $this->assertIdentical(FALSE, $str_pos, 'Selected branch term is not available as an option for parent term for a new term trunk.');
-
-    // Testing the functionality itself.
-
-    // Firstly we need to create a new content type and assign term reference
-    // field to this new content type.
+    // Additionally we need to create a new content type and assign term
+    // reference field to this new content type.
     $this->drupalPost('admin/structure/types/add', array(
       'name' => $this->randomName(),
       'type' => 'term_merge_node',
@@ -464,84 +405,167 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
     $this->drupalPost(NULL, array(), 'Save settings');
     // Flushing fields API the cache.
     _field_info_collate_fields(TRUE);
-    // Creating a new node and settings its term reference field to point to
-    // the term branch.
-    $title = $this->randomName();
-    $this->drupalPost('node/add/term-merge-node', array(
-      'title' => $title,
-      'field_term_reference[' . LANGUAGE_NONE . ']' => $terms['term1']->name,
-    ), 'Save');
-    $node = $this->drupalGetNodeByTitle($title, TRUE);
 
-    // We choose the most "difficult" set of parameters. In particular,
-    // creating a new trunk term with fields attached to vocabulary,
-    // specifying parent for that new trunk term, and setting checkboxes ON.
-    $this->drupalGet('admin/structure/taxonomy/vocabulary/merge');
-    $term_branches = array('term1', 'term2', 'term3');
-    $term_branches_edit = array();
-    foreach ($term_branches as $term_type) {
-      $term_branches_edit[] = $terms[$term_type]->tid;
-    }
-    $this->drupalPostAJAX(NULL, array(
-      'term_branch[]' => $term_branches_edit,
-    ), 'term_branch[]');
-    $this->drupalPostAJAX(NULL, array(
-      'term_branch[]' => $term_branches_edit,
-      'term_trunk[select]' => $new_term_tid,
-    ), 'term_trunk[select]');
-    $this->drupalPostAJAX(NULL, array(
-      'term_branch[]' => $term_branches_edit,
-      'term_trunk[select]' => $new_term_tid,
-    ), array('field_test_text_add_more' => 'Add another item'));
-    // Separately we store info about new trunk term, we will use this array
-    // for futher assertions down below in the code.
-    $new_term_edit = array(
-      'name' => $this->randomName(),
-      'description[value]' => $this->randomName(),
-      'field_test_text[' . LANGUAGE_NONE . '][0][value]' => $this->randomName(),
-      'field_test_text[' . LANGUAGE_NONE . '][1][value]' => $this->randomName(),
+    // Array of cases for which we test the batch.
+    $cases = array(
+      'taxonomy_vocabulary_tab',
+      'taxonomy_term_tab',
     );
-    $edit = $new_term_edit + array(
-      'term_branch[]' => $term_branches_edit,
-      'term_trunk[select]' => $new_term_tid,
-      'relations[parent][]' => array($terms['term_trunk_parent']->tid),
-      'term_branch_keep' => FALSE,
-      'merge_fields' => TRUE,
-      'step' => 2,
-    );
-    $this->drupalPost(NULL, $edit, 'Submit');
-    $this->drupalPost(NULL, array(), 'Confirm');
+    foreach ($cases as $case) {
+      // Creating a necessary set of terms in the vocabulary.
+      drupal_static_reset();
+      $terms = array(
+        'parent' => FALSE,
+        'another_parent' => FALSE,
+        'child' => FALSE,
+        'term1' => FALSE,
+        'term2' => FALSE,
+        'term3' => FALSE,
+        'term_trunk_parent' => FALSE,
+      );
 
-    // Making sure all the branches are deleted.
-    foreach ($term_branches as $term_type) {
-      $term = $terms[$term_type];
-      $this->drupalGet('taxonomy/term/' . $term->tid);
-      $this->assertResponse(404, 'Branch term ' . $term_type . ' has been deleted after merging.');
-    }
-    // Making sure the term trunk has been created, and all the fields from
-    // term branches are imported into this just created term.
-    $term_trunk = $this->getLastTerm($this->vocabulary);
-    $this->drupalGet('taxonomy/term/' . $term_trunk->tid);
-    $text_assertions = $new_term_edit;
-    foreach ($term_branches as $term_type) {
-      $items = field_get_items('taxonomy_term', $terms[$term_type], 'field_test_text');
-      foreach ($items as $delta => $item) {
-        $text_assertions[$term_type . ' text field delta#' . $delta] = $item['value'];
+      foreach ($terms as $term_type => $tmp) {
+        $url = 'admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/add';
+        $edit = array(
+          'name' => $term_type . '_' . $this->randomName(),
+          'field_test_text[' . LANGUAGE_NONE . '][0][value]' => $term_type,
+        );
+
+        if ($term_type == 'child') {
+          $edit['parent[]'] = array($terms['parent']->tid, $terms['another_parent']->tid);
+        }
+
+        $this->drupalPost($url, $edit, 'Save');
+        $terms[$term_type] = $this->getLastTerm($this->vocabulary);
       }
-    }
-    foreach ($text_assertions as $k => $v) {
-      $this->assertText($v, 'New term trunk has the property ' . $k);
-    }
 
-    // Making sure the parent property of the just created trunk term is
-    // correct.
-    $parents = taxonomy_get_parents_all($term_trunk->tid);
-    $this->assertTrue(count($parents) == 2 && $parents[0]->tid == $term_trunk->tid && $parents[1]->tid == $terms['term_trunk_parent']->tid, 'Parent property of the just created new term trunk is correct.');
+      // Making sure children of selected branch terms are not available for
+      // merging into as trunk terms, nor as parent terms for creation of a new
+      // trunk term.
+      $init_url = '';
+      switch ($case) {
+        case 'taxonomy_vocabulary_tab':
+          $init_url = 'admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge';
+          // From the vocabulary tab, we have to specify explicitly the term
+          // branch to be our $terms['parent'] term.
+          $this->drupalGet($init_url);
+          $this->drupalPostAJAX(NULL, array(
+            'term_branch[]' => array($terms['parent']->tid),
+          ), 'term_branch[]');
+          break;
 
-    // Making sure the taxonomy term reference in other entities are updated
-    // to point from term branches to the just created term trunk.
-    $this->drupalGet('node/' . $node->nid);
-    $this->assertText($term_trunk->name, 'Taxonomy term reference fields in other entities are updated to point from term branches to the term trunk.');
+        case 'taxonomy_term_tab':
+          $init_url = 'taxonomy/term/' . $terms['parent']->tid . '/merge';
+          // Besides just making sure the children are not available, in this
+          // case we also assert that the term, for which the tab was clicked,
+          // is selected as term branch by default.
+          $this->drupalGet($init_url);
+          $this->assertOptionSelected('edit-term-branch', $terms['parent']->tid, 'Clicking the "Merge Terms" tab from a term view page sets the viewed term as a term branch by default.');
+          break;
+      }
+
+      $matches = array();
+      preg_match('#\<select[^>]+name="term_trunk\[select\]"[^>]*\>.+?\</select\>#si', $this->content, $matches);
+      $term_trunk_options = $matches[0];
+      $str_pos = strpos($term_trunk_options, $terms['child']->name);
+      $this->assertIdentical(FALSE, $str_pos, 'Child is not available as option for term trunk if its parent is chosen among term branches.');
+      $str_pos = strpos($term_trunk_options, $terms['parent']->name);
+      $this->assertIdentical(FALSE, $str_pos, 'Selected branch term is not available as an option for term trunk.');
+
+      // At the same time asserting if we choose "New Term" option, there are no
+      // children of the selected branch terms, nor the branch terms themselves.
+      $this->drupalPostAJAX(NULL, array(
+        'term_branch[]' => array($terms['parent']->tid),
+        'term_trunk[select]' => $new_term_tid,
+      ), 'term_trunk[select]');
+
+      $matches = array();
+      preg_match('#\<select[^>]+name="relations\[parent\]\[\]"[^>]*\>.+?\</select\>#si', $this->content, $matches);
+      $new_term_parent_options = $matches[0];
+      $str_pos = strpos($new_term_parent_options, $terms['child']->name);
+      $this->assertIdentical(FALSE, $str_pos, 'Child is not available as option for parent term for a new term trunk if its parent is chosen among term branches.');
+      $str_pos = strpos($new_term_parent_options, $terms['parent']->name);
+      $this->assertIdentical(FALSE, $str_pos, 'Selected branch term is not available as an option for parent term for a new term trunk.');
+
+      // Creating a new node and settings its term reference field to point to
+      // the term branch.
+      $title = $this->randomName();
+      $this->drupalPost('node/add/term-merge-node', array(
+        'title' => $title,
+        'field_term_reference[' . LANGUAGE_NONE . ']' => $terms['term1']->name,
+      ), 'Save');
+      $node = $this->drupalGetNodeByTitle($title, TRUE);
+
+      // We choose the most "difficult" set of parameters. In particular,
+      // creating a new trunk term with fields attached to vocabulary,
+      // specifying parent for that new trunk term, and setting checkboxes ON.
+      $this->drupalGet($init_url);
+      $term_branches = array('term1', 'term2', 'term3');
+      $term_branches_edit = array();
+      foreach ($term_branches as $term_type) {
+        $term_branches_edit[] = $terms[$term_type]->tid;
+      }
+      $this->drupalPostAJAX(NULL, array(
+        'term_branch[]' => $term_branches_edit,
+      ), 'term_branch[]');
+      $this->drupalPostAJAX(NULL, array(
+        'term_branch[]' => $term_branches_edit,
+        'term_trunk[select]' => $new_term_tid,
+      ), 'term_trunk[select]');
+      $this->drupalPostAJAX(NULL, array(
+        'term_branch[]' => $term_branches_edit,
+        'term_trunk[select]' => $new_term_tid,
+      ), array('field_test_text_add_more' => 'Add another item'));
+      // Separately we store info about new trunk term, we will use this array
+      // for futher assertions down below in the code.
+      $new_term_edit = array(
+        'name' => $this->randomName(),
+        'description[value]' => $this->randomName(),
+        'field_test_text[' . LANGUAGE_NONE . '][0][value]' => $this->randomName(),
+        'field_test_text[' . LANGUAGE_NONE . '][1][value]' => $this->randomName(),
+      );
+      $edit = $new_term_edit + array(
+        'term_branch[]' => $term_branches_edit,
+        'term_trunk[select]' => $new_term_tid,
+        'relations[parent][]' => array($terms['term_trunk_parent']->tid),
+        'term_branch_keep' => FALSE,
+        'merge_fields' => TRUE,
+        'step' => 2,
+      );
+      $this->drupalPost(NULL, $edit, 'Submit');
+      $this->drupalPost(NULL, array(), 'Confirm');
+
+      // Making sure all the branches are deleted.
+      foreach ($term_branches as $term_type) {
+        $term = $terms[$term_type];
+        $this->drupalGet('taxonomy/term/' . $term->tid);
+        $this->assertResponse(404, 'Branch term ' . $term_type . ' has been deleted after merging.');
+      }
+      // Making sure the term trunk has been created, and all the fields from
+      // term branches are imported into this just created term.
+      $term_trunk = $this->getLastTerm($this->vocabulary);
+      $this->drupalGet('taxonomy/term/' . $term_trunk->tid);
+      $text_assertions = $new_term_edit;
+      foreach ($term_branches as $term_type) {
+        $items = field_get_items('taxonomy_term', $terms[$term_type], 'field_test_text');
+        foreach ($items as $delta => $item) {
+          $text_assertions[$term_type . ' text field delta#' . $delta] = $item['value'];
+        }
+      }
+      foreach ($text_assertions as $k => $v) {
+        $this->assertText($v, 'New term trunk has the property ' . $k);
+      }
+
+      // Making sure the parent property of the just created trunk term is
+      // correct.
+      $parents = taxonomy_get_parents_all($term_trunk->tid);
+      $this->assertTrue(count($parents) == 2 && $parents[0]->tid == $term_trunk->tid && $parents[1]->tid == $terms['term_trunk_parent']->tid, 'Parent property of the just created new term trunk is correct.');
+
+      // Making sure the taxonomy term reference in other entities are updated
+      // to point from term branches to the just created term trunk.
+      $this->drupalGet('node/' . $node->nid);
+      $this->assertText($term_trunk->name, 'Taxonomy term reference fields in other entities are updated to point from term branches to the term trunk.');
+    }
   }
 
   /**

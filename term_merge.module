@@ -421,7 +421,7 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     $form['term_branch_keep'] = array(
       '#type' => 'checkbox',
       '#title' => t('Only merge occurrences'),
-      '#description' => t('Check this if you want to only merge the occurrences of the specified terms, i.e. the terms will not be deleted from your vucabulary.'),
+      '#description' => t('Check this if you want to only merge the occurrences of the specified terms, i.e. the terms will not be deleted from your vocabulary.'),
     );
 
     $form['merge_fields'] = array(

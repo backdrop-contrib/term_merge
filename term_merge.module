@@ -71,9 +71,9 @@ function term_merge_action_info() {
  */
 function term_merge_help($path, $arg) {
   switch ($path) {
-    // Main module help for the block module.
+    // Main module help for the Term Merge module.
     case 'admin/help#term_merge':
-      return '<p>Allows you to merge multiple terms into one and and at the same time update all fields referencing to the old ones.</p>';
+      return '<p>' . t('Allows you to merge multiple terms into one and and at the same time update all fields referencing to the old ones.') . '</p>';
       break;
   }
 }

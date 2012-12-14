@@ -327,6 +327,7 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
         'effect' => 'fade',
       ),
       '#default_value' => $term_branch_value,
+      '#size' => 8,
     );
 
     if (isset($form_state['values']['term_branch']) && is_array($form_state['values']['term_branch'])) {

@@ -18,6 +18,11 @@ all fields referring to those terms to refer to the replacement term instead.
 Currently, the module only acts on fields. It would be desirable to update
 other possible places where deleted terms are used.
 
+Requirements
+-------------
+ * The modules requires enabled Taxonomy module (ships with drupal core)
+  and Entity API (http://drupal.org/project/entity).
+
 Installation
 ------------
  * Copy the module's directory to your modules directory and activate the module.

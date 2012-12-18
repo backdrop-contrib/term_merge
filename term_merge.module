@@ -213,45 +213,8 @@ function term_merge_action($object, $context) {
             }
           }
         }
-        // Now the only thing here left is to save entity with the updated
-        // field value but it's not so easy to achieve since there is no
-        // unified interface for saving entities of any type (or at least
-        // I haven't found one). Thus unfortunatley we have to hardcode save
-        // callback functions per each known entity type. This is awful but
-        // it's as best as we can do as of the moment.
-        // A good alternative to this hardcoding could be use of entity.module,
-        // but at the time, when this code was written entity.module hasn't
-        // had a stable release yet. We might take advantage of entity.module
-        // in future once it gets a stable release. Yet another worth-to-check
-        // alternative could be use of functions field_attach_presave() and
-        // field_attach_update().
-        // http://blog.urbaninsight.com/2011/10/24/saving-nodes-fields-
-        // without-saving-node-itself
-        switch ($entity_type) {
-          case 'node':
-            node_save($entity);
-            break;
-
-          case 'user':
-            user_save($entity, array($field_name => $entity->$field_name));
-            break;
-
-          case 'file':
-            file_save($entity);
-            break;
-
-          case 'comment':
-            comment_save($entity);
-            break;
-
-          case 'taxonomy_term':
-            taxonomy_term_save($entity);
-            break;
-
-          case 'taxonomy_vocabulary':
-            taxonomy_vocabulary_save($entity);
-            break;
-        }
+        // After updating all the references, save the entity.
+        entity_save($entity_type, $entity);
       }
     }
   }

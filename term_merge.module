@@ -67,7 +67,7 @@ function term_merge_permission() {
     'merge terms' => array(
       'title' => t('Merge terms'),
       'description' => t('Gives the ability to merge taxonomy terms.'),
-    )
+    ),
   );
 }
 
@@ -427,7 +427,10 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     );
 
     if (module_exists('redirect')) {
-      $options = array(TERM_MERGE_NO_REDIRECT => 'No redirect') + array(0 => t('Default (@default)', array('@default' => variable_get('redirect_default_status_code', 301)))) + redirect_status_code_options();
+      $options = array(TERM_MERGE_NO_REDIRECT => 'No redirect') + array(
+        0 => t('Default (@default)',
+        array('@default' => variable_get('redirect_default_status_code', 301))),
+      ) + redirect_status_code_options();
       $form['redirect'] = array(
         // We respect access rights defined in redirect.module here.
         '#access' => user_access('administer redirects'),
@@ -441,7 +444,7 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     }
     else {
       $form['redirect'] = array(
-        '#markup' => t('Enable the module <a href="http://drupal.org/project/redirect">Redirect</a> if you want to do an HTTP redirect from your term branch to the term trunk.')
+        '#markup' => t('Enable the module <a href="http://drupal.org/project/redirect">Redirect</a> if you want to do an HTTP redirect from your term branch to the term trunk.'),
       );
     }
 
@@ -780,7 +783,14 @@ function term_merge($term_branch, $term_trunk, $term_branch_keep = FALSE, $merge
   $batch = array(
     'title' => t('Merging terms'),
     'operations' => array(
-      array('term_merge_batch_process', array($term_branch, $term_trunk, $term_branch_keep, $merge_fields, $redirect, $step)),
+      array('term_merge_batch_process', array(
+        $term_branch,
+        $term_trunk,
+        $term_branch_keep,
+        $merge_fields,
+        $redirect,
+        $step,
+      )),
     ),
     'finished' => 'term_merge_batch_finished',
   );

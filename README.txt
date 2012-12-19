@@ -33,4 +33,5 @@ The modules requires enabled the following modules:
 
 Installation
 ------------
- * Copy the module's directory to your modules directory and activate the module.
+ * Copy the module's directory to your modules directory and activate the
+ module.

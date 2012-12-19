@@ -531,8 +531,9 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           $this->assertIdentical(FALSE, $str_pos, 'Child is not available as option for term trunk if its parent is chosen among term branches.');
           $str_pos = strpos($term_trunk_options, $terms['parent']->name);
           $this->assertIdentical(FALSE, $str_pos, 'Selected branch term is not available as an option for term trunk.');
-          // At the same time asserting if we choose "New Term" option, there are no
-          // children of the selected branch terms, nor the branch terms themselves.
+          // At the same time asserting if we choose "New Term" option, there
+          // are no children of the selected branch terms, nor the branch terms
+          // themselves.
           $this->drupalPostAJAX(NULL, array(
             'term_branch[]' => array($terms['parent']->tid),
             'term_trunk[widget]' => $term_trunk_widget,
@@ -735,7 +736,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
    *
    * @var stdClass
    */
-  protected $super_admin;
+  protected $superAdmin;
 
   /**
    * SetUp method.
@@ -743,7 +744,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
   public function setUp() {
     parent::setUp(array('redirect', 'path'));
 
-    $this->super_admin = $this->drupalCreateUser(array(
+    $this->superAdmin = $this->drupalCreateUser(array(
       'administer taxonomy',
       'merge terms',
       'administer content types',
@@ -774,7 +775,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertNoPattern('#\<select[^>]+name="redirect"[^>]*\>#i', 'No redirection settings are available for user that does not possess corresponding permissions.');
 
-    $this->drupalLogin($this->super_admin);
+    $this->drupalLogin($this->superAdmin);
     $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertPattern('#\<select[^>]+name="redirect"[^>]*\>#i', 'Redirection settings are available for user that possesses corresponding permissions.');
 
@@ -789,7 +790,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
    * Test the action 'term_merge_action' in terms of integration with Redirect.
    */
   public function testTermMergeAction() {
-    $this->drupalLogin($this->super_admin);
+    $this->drupalLogin($this->superAdmin);
     $terms = $this->createTerms(array('branch', 'trunk'));
 
     // Testing default value.
@@ -821,7 +822,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
    * Test Term Merge batch in terms of integration with Redirect/Path modules.
    */
   public function testTermMergeBatch() {
-    $this->drupalLogin($this->super_admin);
+    $this->drupalLogin($this->superAdmin);
 
     // Trying to merge without redirection.
     $terms = $this->createTerms(array('branch', 'trunk'));
@@ -930,6 +931,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
    *   of the supplied array.
    *
    * @param array $terms
+   *   Array of machine readable term keys based on which is generated output
    *
    * @return array
    *   Array of taxonomy term objects path alias of which is equal to the value

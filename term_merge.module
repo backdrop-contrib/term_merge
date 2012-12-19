@@ -11,7 +11,8 @@
 define('TERM_MERGE_NO_REDIRECT', -1);
 
 /**
- * Constant denotes "Create a new term and use it as the term trunk" logic.
+ * Constant denotes "Create a new term and use it as the term trunk" logic
+ * for term merge action.
  */
 define('TERM_MERGE_NEW_TERM_TRUNK', -1);
 
@@ -36,6 +37,14 @@ function term_merge_menu() {
     'access arguments' => array('merge terms'),
     'type' => MENU_LOCAL_TASK,
     'weight' => 10,
+  );
+
+  $items['term-merge/autocomplete/term-trunk/%taxonomy_vocabulary_machine_name'] = array(
+    'title' => 'Autocomplete Term Merge form term trunk',
+    'page callback' => 'term_merge_form_term_trunk_widget_autocomplete_autocomplete',
+    'page arguments' => array(3),
+    'access arguments' => array('merge terms'),
+    'type' => MENU_CALLBACK,
   );
 
   return $items;
@@ -95,7 +104,7 @@ function term_merge_action_form($context) {
   $form = array();
 
   $form['displaimer'] = array(
-    '#markup' => t('<b>Sorry, currently Term Merge action is not supported via user interface. Please, contact the maintainers at the official website if you need it enabled via user interface.</b>'),
+    '#markup' => '<b>' . t('Sorry, currently Term Merge action is not supported via user interface. Please, contact the maintainers at the official website if you need it enabled via user interface.') . '</b>',
   );
 
   return $form;
@@ -141,7 +150,7 @@ function term_merge_action($object, $context) {
   // Defining some default values.
   if (!isset($context['merge_fields'])) {
     // It's easier to delete extra values if you forgot to specify this
-    // parameter, rather than seach for your DB back up. So by defualt we merge
+    // parameter, rather than search for your DB back up. So by defualt we merge
     // field values.
     $context['merge_fields'] = TRUE;
   }
@@ -156,7 +165,7 @@ function term_merge_action($object, $context) {
   }
 
   if ($context['merge_fields']) {
-    // "Merging" the fields for $term_branch into $term_trunk where it's
+    // "Merging" the fields from $term_branch into $term_trunk where it's
     // possible.
     $bundle = field_extract_bundle('taxonomy_term', $vocabulary);
     $instances = field_info_instances('taxonomy_term', $bundle);
@@ -220,7 +229,7 @@ function term_merge_action($object, $context) {
       // to point to $term_trunk.
       foreach ($entities as $entity) {
         // What is more, we have to do it for every available language.
-        foreach ($entity->$field_name as $language => $field_instance_value) {
+        foreach ($entity->$field_name as $language => $items) {
           foreach ($entity->{$field_name}[$language] as $delta => $item) {
             if ($item['tid'] == $term_branch->tid) {
               $entity->{$field_name}[$language][$delta]['tid'] = $term_trunk->tid;
@@ -233,7 +242,7 @@ function term_merge_action($object, $context) {
     }
   }
 
-  // It turned out we gotta go tricky with redirect module. If we create
+  // It turned out we gotta go tricky with the Redirect module. If we create
   // redirection before deleting the branch term (if we are instructed to delete
   // in this action) redirect module will do its "auto-clean up" in
   // hook_entity_delete() and will delete our just created redirects. But at the
@@ -270,7 +279,7 @@ function term_merge_action($object, $context) {
     taxonomy_term_delete($term_branch->tid);
   }
 
-  // Here we do the 2nd part of integraiton with the redirect module. Once the
+  // Here we do the 2nd part of integraiton with the Redirect module. Once the
   // branch term has been deleted (if deleted), we can add the redirects
   // without being afraid that the redirect module will delete them in its
   // hook_entity_delete().
@@ -309,9 +318,17 @@ function term_merge_action($object, $context) {
  *   Array of the form
  */
 function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
+  // If there are more than this many terms in the vocabulary the default
+  // widget for term trunk field becomes autocomplete textfield instead of a
+  // select.
+  $term_trunk_widget_autocomplete_threshold = 100;
+
   if (is_null($vocabulary)) {
     $vocabulary = taxonomy_vocabulary_load($term->vid);
   }
+
+  // It's always handy to have the vocabulary by hand.
+  $form['#vocabulary'] = $vocabulary;
 
   if (!isset($form_state['storage']['confirm'])) {
     // We are at the set up step.
@@ -341,86 +358,61 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
       '#size' => 8,
     );
 
-    if (isset($form_state['values']['term_branch']) && is_array($form_state['values']['term_branch'])) {
-      $term_branch_value = $form_state['values']['term_branch'];
-    }
-
-    if (is_array($term_branch_value)) {
-      // We have to make sure among term_trunk there is no term_branch or any of
-      // their children.
-      foreach ($term_branch_value as $v) {
-        unset($options[$v]);
-        foreach (taxonomy_get_tree($vocabulary->vid, $v) as $child) {
-          unset($options[$child->tid]);
-        }
-      }
-      $options = array(TERM_MERGE_NEW_TERM_TRUNK => 'New Term') + $options;
-    }
-    else {
-      // Term branch has not been selected yet.
-      $options = array();
-    }
-
     $form['term_trunk'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Merge Into'),
       '#prefix' => '<div id="term-merge-form-term-trunk">',
       '#suffix' => '</div>',
       '#tree' => TRUE,
     );
 
-    $form['term_trunk']['select'] = array(
-      '#type' => 'select',
-      '#title' => t('Merge into'),
+    // Array of currently available widgets for choosing term trunk.
+    $term_trunk_widget_options = array(
+      'autocomplete' => 'Autocomplete',
+      'select' => 'Select',
+    );
+
+    $term_trunk_widget = count($tree) > $term_trunk_widget_autocomplete_threshold ? 'autocomplete' : 'select';
+    // Override the term trunk widget if settings are found in $form_state.
+    if (isset($form_state['values']['term_trunk']['widget']) && in_array($form_state['values']['term_trunk']['widget'], array_keys($term_trunk_widget_options))) {
+      $term_trunk_widget = $form_state['values']['term_trunk']['widget'];
+    }
+
+    $form['term_trunk']['widget'] = array(
+      '#type' => 'radios',
+      '#title' => t('Widget'),
       '#required' => TRUE,
-      '#description' => t('Please, choose into what term you want to merge.'),
-      '#options' => $options,
+      '#options' => $term_trunk_widget_options,
+      '#default_value' => $term_trunk_widget,
+      '#description' => t('Please, choose what widget you prefer for entering the term trunk. Note, in autocomplete widget you will not have an option for creating a new term and then it using as the term trunk.'),
       '#ajax' => array(
-        'callback' => 'term_merge_form_term_trunk_term_create',
-        'wrapper' => 'term-merge-form-term-trunk-term-create',
+        'callback' => 'term_merge_form_term_trunk',
+        'wrapper' => 'term-merge-form-term-trunk',
         'method' => 'replace',
         'effect' => 'fade',
       ),
     );
 
-    $form['term_trunk']['term_create'] = array(
-      '#prefix' => '<div id="term-merge-form-term-trunk-term-create">',
-      '#suffix' => '</div>',
-    );
-    // We throw in Taxonomy native term create form only if the option for
-    // creation of a new term was selected by user.
-    if (isset($form_state['values']['term_trunk']['select']) && $form_state['values']['term_trunk']['select'] == TERM_MERGE_NEW_TERM_TRUNK) {
-      module_load_include('inc', 'taxonomy', 'taxonomy.admin');
+    // @todo:
+    // There is a known bug, if user has selected something in one widget, and
+    // then changes the widget, $form_states['values'] will hold the value for
+    // term trunk form element in the format that is used in one widget, while
+    // this value will be passed to another widget. This triggers different
+    // unpleasant effects like showing tid instead of term's name or vice-versa.
+    // I think we should just empty $form_state['values'] for the term trunk
+    // form element when widget changes. Better ideas are welcome!
+    switch ($term_trunk_widget) {
+      case 'select':
+        term_merge_form_term_trunk_widget_select($form, $form_state, $vocabulary);
+        break;
 
-      $form['term_trunk']['term_create'] += array(
-        '#type' => 'fieldset',
-        '#title' => t('Create New Term'),
-      );
-
-      $form['term_trunk']['term_create'] += taxonomy_form_term($form['term_trunk']['term_create'], $form_state, array(), $vocabulary);
-      // We have our own submit button, so we unset the normal one from the term
-      // create form.
-      unset($form['term_trunk']['term_create']['actions']);
-      // Additionally we have to filter out from "Parent Terms" select the already
-      // selected branch terms and their children, because we can't merge into
-      // the term itself or its children.
-      // We do a trick here, since we know the 1st element is the <root> option
-      // and all others are normal taxonomy terms, we keep the 1st element as it is
-      // and all the next elements we substitute with out $options array which is
-      // basically identical but already has filtered out unwanted terms.
-      $form['term_trunk']['term_create']['relations']['parent']['#options'] = array_slice($form['term_trunk']['term_create']['relations']['parent']['#options'], 0, 1, TRUE) + $options;
-
-      // For each field attached to taxonomy term of this vocabualry that has
-      // unlimited cardinality we have to extra process the results, otherwise
-      // "Add another item" button doesn't work.
-      $instances = field_info_instances($form['term_trunk']['term_create']['#entity_type'], $form['term_trunk']['term_create']['#bundle']);
-      foreach ($instances as $instance) {
-        $field = field_info_field($instance['field_name']);
-        if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
-          if (isset($form['term_trunk']['term_create'][$field['field_name']][LANGUAGE_NONE]['add_more']['#limit_validation_errors'])) {
-            $form['term_trunk']['term_create'][$field['field_name']][LANGUAGE_NONE]['add_more']['#limit_validation_errors'] = array(array('term_branch'), array('term_trunk'));
-          }
-        }
-      }
+      case 'autocomplete':
+        term_merge_form_term_trunk_widget_autocomplete($form, $form_state, $vocabulary);
+        break;
     }
+    // Ensuring the Merge Into form element has the same title no matter what
+    // widget has been used.
+    $form['term_trunk']['tid']['#title'] = t('Merge into');
 
     $form['term_branch_keep'] = array(
       '#type' => 'checkbox',
@@ -465,6 +457,7 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     $form['actions'] = array(
       '#type' => 'actions',
     );
+
     $form['actions']['submit'] = array(
       '#type' => 'submit',
       '#value' => t('Submit'),
@@ -478,6 +471,29 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
   }
 
   return $form;
+}
+
+/**
+ * Supportive function.
+ *
+ * Validate the term_merge_form(). Make sure term trunk is not among the
+ * selected term branches or their children.
+ */
+function term_merge_form_validate($form, &$form_state) {
+  if (!isset($form_state['storage']['confirm'])) {
+    // We only validate the 1st step of the form.
+    $prohibited_trunks = array();
+    foreach ($form_state['values']['term_branch'] as $term_branch) {
+      $children = taxonomy_get_tree($form['#vocabulary']->vid, $term_branch);
+      $prohibited_trunks[] = $term_branch;
+      foreach ($children as $child) {
+        $prohibited_trunks[] = $child->tid;
+      }
+    }
+    if (in_array($form_state['values']['term_trunk']['tid'], $prohibited_trunks)) {
+      form_error($form['term_trunk']['tid'], t('Trunk term cannot be on of the selected branch terms or their children.'));
+    }
+  }
 }
 
 /**
@@ -503,14 +519,14 @@ function term_merge_form_submit($form, &$form_state) {
     $form_state['values'] = $form_state['storage']['info'];
 
     // If necessary, create the term trunk.
-    if ($form_state['values']['term_trunk']['select'] == TERM_MERGE_NEW_TERM_TRUNK) {
+    if ($form_state['values']['term_trunk']['tid'] == TERM_MERGE_NEW_TERM_TRUNK) {
       // We try to mimic normal form submission for taxonomy module.
       module_load_include('inc', 'taxonomy', 'taxonomy.admin');
       taxonomy_form_term_submit($form_state['storage']['old_form']['term_trunk']['term_create'], $form_state);
       $term_trunk = $form_state['term'];
     }
     else {
-      $term_trunk = taxonomy_term_load($form_state['values']['term_trunk']['select']);
+      $term_trunk = taxonomy_term_load($form_state['values']['term_trunk']['tid']);
     }
 
     $redirect = isset($form_state['values']['redirect']) ? $form_state['values']['redirect'] : TERM_MERGE_NO_REDIRECT;
@@ -521,9 +537,200 @@ function term_merge_form_submit($form, &$form_state) {
 }
 
 /**
+ * Supportive function.
+ *
+ * Generate form elements for select widget for term trunk element of the
+ * term_merge_form().
+ *
+ * @param object $vocabulary
+ *   Fully loaded taxonomy vocabulary object
+ */
+function term_merge_form_term_trunk_widget_select(&$form, &$form_state, $vocabulary) {
+  $tree = taxonomy_get_tree($vocabulary->vid);
+  $options = array();
+  foreach ($tree as $k => $v) {
+    $options[$v->tid] = str_repeat('-', $v->depth) . $v->name;
+    // Additionally we key the $tree by term->tid.
+    unset($tree[$k]);
+    $tree[$v->tid] = $v;
+  }
+
+  $term_branch_value = array();
+  // Firstly trying to look up selected term branches in the default value of
+  // term branch form element.
+  if (isset($form['term_branch']['#default_value']) && is_array($form['term_branch']['#default_value'])) {
+    $term_branch_value = $form['term_branch']['#default_value'];
+  }
+  if (isset($form_state['values']['term_branch']) && is_array($form_state['values']['term_branch'])) {
+    $term_branch_value = $form_state['values']['term_branch'];
+  }
+
+  if (!empty($term_branch_value)) {
+    // We have to make sure among term_trunk there is no term_branch or any of
+    // their children.
+    foreach ($term_branch_value as $v) {
+      unset($options[$v]);
+      foreach (taxonomy_get_tree($vocabulary->vid, $v) as $child) {
+        unset($options[$child->tid]);
+      }
+    }
+    $options = array(TERM_MERGE_NEW_TERM_TRUNK => 'New Term') + $options;
+  }
+  else {
+    // Term branch has not been selected yet.
+    $options = array();
+  }
+
+  $form['term_trunk']['tid'] = array(
+    '#type' => 'select',
+    '#required' => TRUE,
+    '#description' => t('Please, choose into what term you want to merge.'),
+    '#options' => $options,
+    '#ajax' => array(
+      'callback' => 'term_merge_form_term_trunk_term_create',
+      'wrapper' => 'term-merge-form-term-trunk-term-create',
+      'method' => 'replace',
+      'effect' => 'fade',
+    ),
+  );
+
+  $form['term_trunk']['term_create'] = array(
+    '#prefix' => '<div id="term-merge-form-term-trunk-term-create">',
+    '#suffix' => '</div>',
+  );
+  // We throw in the Taxonomy native term create form only if the option for
+  // creation of a new term was selected by user.
+  if (isset($form_state['values']['term_trunk']['tid']) && $form_state['values']['term_trunk']['tid'] == TERM_MERGE_NEW_TERM_TRUNK) {
+    module_load_include('inc', 'taxonomy', 'taxonomy.admin');
+
+    $form['term_trunk']['term_create'] += array(
+      '#type' => 'fieldset',
+      '#title' => t('Create New Term'),
+    );
+
+    $form['term_trunk']['term_create'] += taxonomy_form_term($form['term_trunk']['term_create'], $form_state, array(), $vocabulary);
+    // We have our own submit button, so we unset the normal one from the term
+    // create form.
+    unset($form['term_trunk']['term_create']['actions']);
+    // Additionally we have to filter out from "Parent Terms" select the already
+    // selected branch terms and their children, because we can't merge into
+    // the term itself or its children.
+    // We do a trick here, since we know the 1st element is the <root> option
+    // and all others are normal taxonomy terms, we keep the 1st element as it
+    // is while all the other elements we substitute with our $options array
+    // which is basically identical but already has filtered out unwanted terms.
+    // Plus we have to unset the 'New Term' option from $options.
+    unset($options[TERM_MERGE_NEW_TERM_TRUNK]);
+    $form['term_trunk']['term_create']['relations']['parent']['#options'] = array_slice($form['term_trunk']['term_create']['relations']['parent']['#options'], 0, 1, TRUE) + $options;
+
+    // For each field attached to taxonomy term of this vocabualry that has
+    // unlimited cardinality we have to extra process the results, otherwise
+    // "Add another item" button doesn't work.
+    $instances = field_info_instances($form['term_trunk']['term_create']['#entity_type'], $form['term_trunk']['term_create']['#bundle']);
+    foreach ($instances as $instance) {
+      $field = field_info_field($instance['field_name']);
+      if ($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED) {
+        if (isset($form['term_trunk']['term_create'][$field['field_name']][LANGUAGE_NONE]['add_more']['#limit_validation_errors'])) {
+          $form['term_trunk']['term_create'][$field['field_name']][LANGUAGE_NONE]['add_more']['#limit_validation_errors'] = array(array('term_branch'), array('term_trunk'));
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Supportive function.
+ *
+ * Generate form elements for autocomplete widget for term trunk element of the
+ * term_merge_form().
+ *
+ * @param object $vocabulary
+ *   Fully loaded taxonomy vocabulary object
+ */
+function term_merge_form_term_trunk_widget_autocomplete(&$form, &$form_state, $vocabulary) {
+  $form['term_trunk']['tid'] = array(
+    '#type' => 'textfield',
+    '#description' => t("Start typing in a term's name in order to get some suggestions."),
+    '#required' => TRUE,
+    '#autocomplete_path' => 'term-merge/autocomplete/term-trunk/' . $vocabulary->machine_name,
+    '#element_validate' => array('term_merge_form_trunk_term_widget_autocomplete_validate'),
+  );
+}
+
+/**
+ * Supportive function.
+ *
+ * Validate form element of the autocomplete widget of term trunk element of
+ * the form term_merge_form(). Make sure the enetered string is a name of one of
+ * the existing terms in the vocabulary where the merge occurs. If term is found
+ * the function substitutes the name with its {taxonomy_term_data}.tid as it
+ * what is expected from a term trunk widget to provide in its value.
+ */
+function term_merge_form_trunk_term_widget_autocomplete_validate($element, &$form_state, $form) {
+  $term = taxonomy_get_term_by_name($element['#value'], $form['#vocabulary']->machine_name);
+  if (!is_array($term) || empty($term)) {
+    // Seems like the user has entered a non existing name in the autocomplete
+    // textfield.
+    form_error($element, t('There are no terms with name %name in the %vocabulary vocabulary.', array(
+      '%name' => $element['#value'],
+      '%vocabulary' => $form['#vocabulary']->name,
+    )));
+  }
+  else {
+    // We have to substitute the term's name with its tid in order to make this
+    // widget unified with the interface.
+    $term = array_pop($term);
+    form_set_value($element, $term->tid, $form_state);
+  }
+}
+
+/**
+ * Menu page callback function.
+ *
+ * Autocomplete callback function for the trunk term form element in the widget
+ *   of autocomplete. The code of this function was mainly copy-pasted from
+ *   Taxonomy autocomplete widget menu callback function.
+ *
+ * @param object $vocabulary
+ *   Fully loaded vocabulary object inside of which the terms are about to be
+ *     merged
+ */
+function term_merge_form_term_trunk_widget_autocomplete_autocomplete($vocabulary) {
+  // If the request has a '/' in the search text, then the menu system will have
+  // split it into multiple arguments, recover the intended $tags_typed.
+  $args = func_get_args();
+  // Shift off the $vocabulary argument.
+  array_shift($args);
+  $tags_typed = implode('/', $args);
+
+  // Querying database for suggestions.
+  $query = db_select('taxonomy_term_data', 't');
+  $tags_return = $query->addTag('translatable')
+    ->addTag('term_access')
+    ->fields('t', array('tid', 'name'))
+    ->condition('t.vid', $vocabulary->vid)
+    ->condition('t.name', '%' . db_like($tags_typed) . '%', 'LIKE')
+    ->range(0, 10)
+    ->execute()
+    ->fetchAllKeyed();
+
+  $term_matches = array();
+  foreach ($tags_return as $name) {
+    $n = $name;
+    // Term names containing commas or quotes must be wrapped in quotes.
+    if (strpos($name, ',') !== FALSE || strpos($name, '"') !== FALSE) {
+      $n = '"' . str_replace('"', '""', $name) . '"';
+    }
+    $term_matches[$n] = check_plain($name);
+  }
+
+  drupal_json_output($term_matches);
+}
+
+/**
  * Ajax callback function.
  *
- * Used in term_merge_term_merge_form() to replace the term_trunk select element
+ * Used in term_merge_term_merge_form() to replace the term_trunk element
  *   depending on already selected term_branch values.
  */
 function term_merge_form_term_trunk($form, $form_state) {
@@ -546,7 +753,7 @@ function term_merge_form_term_trunk_term_create($form, $form_state) {
  * @param array $term_branch
  *   A single term tid or an array of term tids to be merged, aka term branches
  * @param int $term_trunk
- *   The tid of the term to merge sources into, aka term trunk
+ *   The tid of the term to merge term branches into, aka term trunk
  * @param bool $term_branch_keep
  *   Whether the term branches should not be deleted, also known as "merge only
  *     occurrences" option
@@ -557,8 +764,8 @@ function term_merge_form_term_trunk_term_create($form, $form_state) {
  *   HTTP code for redirect from $term_branch to $term_trunk, 0 stands for the
  *     default redirect defined in Redirect module. Use constant
  *     TERM_MERGE_NO_REDIRECT to denote not creating any HTTP redirect.
- *     Note: this parameter requires Redirect module enabled, otherwise it will be
- *     disgarded
+ *     Note: this parameter requires Redirect module enabled, otherwise it will
+ *     be disgarded
  * @param int $step
  *   How many term branches to merge per script run in batch. If you are hitting
  *     time or memory limits, decrease this parameter
@@ -590,18 +797,19 @@ function term_merge($term_branch, $term_trunk, $term_branch_keep = FALSE, $merge
  * @param array $term_branch
  *   An array of term tids to be merged, aka term branches
  * @param int $term_trunk
- *   The tid of the term to merge sources into, aka term trunk
+ *   The tid of the term to merge term branches into, aka term trunk
  * @param bool $term_branch_keep
  *   Whether the term branches should be kept in vocabulary after updating
- *     all term reference fields
+ *     all taxonomy term reference fields
  * @param bool $merge_fields
  *   Whether to the values of term trunk should be added values of
  *     corresponding fields of term branch. The values will be added until
  *     the cardinality limit for each field is reached.
  * @param int $redirect
  *   HTTP code for redirect from $term_branch to $term_trunk. 0 stands for the
- *     default redirect. Use TERM_MERGE_NO_REDIRECT to denote not creating HTTP
- *     redirect. Note: this setting requires Redirect module
+ *     default redirect defined in Redirect module. Use TERM_MERGE_NO_REDIRECT
+ *     to denote not creating HTTP redirect. Note: this setting requires
+ *     Redirect module
  * @param int $step
  *   How many term branches to process per script run in batch. If you are
  *     hitting time or memory limits, decrease this parameter
@@ -616,7 +824,7 @@ function term_merge_batch_process($term_branch, $term_trunk, $term_branch_keep, 
 
   $total = count($term_branch);
   // To speed up the process we take advantage of taxonomy_term_load_multiple()
-  // over just repeating calls to taxonomy_term_load().
+  // instead of just repeating calls to taxonomy_term_load().
   $till = min($total, $context['sandbox']['current'] + $step);
   $length = $till - $context['sandbox']['current'];
   array_slice($term_branch, $context['sandbox']['current'], $length);
@@ -649,6 +857,6 @@ function term_merge_batch_finished($success, $results, $operations) {
   }
   else {
     // An error happened. We have to notify the user.
-    drupal_set_message(t('An error occurred. We are sorry, please, report this error to the maintainers of Taxonomy Merge module.'), 'error');
+    drupal_set_message(t('An error occurred. We are sorry, please, report this error to the maintainers of Term Merge module.'), 'error');
   }
 }

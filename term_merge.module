@@ -30,8 +30,21 @@ function term_merge_menu() {
     'type' => MENU_LOCAL_TASK,
   );
 
+  $items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/merge/regular'] = array(
+    'title' => 'Default',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+
+  $items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/merge/duplicates'] = array(
+    'title' => 'Merge Duplicate Terms',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('term_merge_duplicates_form', 3),
+    'access arguments' => array('merge terms'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
   $items['taxonomy/term/%taxonomy_term/merge'] = array(
-    'title' => 'Merge terms',
+    'title' => 'Merge Terms',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('term_merge_form', NULL, 2),
     'access arguments' => array('merge terms'),
@@ -414,48 +427,8 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     // widget has been used.
     $form['term_trunk']['tid']['#title'] = t('Merge into');
 
-    $form['term_branch_keep'] = array(
-      '#type' => 'checkbox',
-      '#title' => t('Only merge occurrences'),
-      '#description' => t('Check this if you want to only merge the occurrences of the specified terms, i.e. the terms will not be deleted from your vocabulary.'),
-    );
-
-    $form['merge_fields'] = array(
-      '#type' => 'checkbox',
-      '#title' => t('Merge Term Fields'),
-      '#description' => t('Whether to the values of term trunk should be added the values of corresponding fields of term branch. The values will be added until the cardinality limit for each field is reached.'),
-    );
-
-    if (module_exists('redirect')) {
-      $options = array(TERM_MERGE_NO_REDIRECT => 'No redirect') + array(
-        0 => t('Default (@default)',
-        array('@default' => variable_get('redirect_default_status_code', 301))),
-      ) + redirect_status_code_options();
-      $form['redirect'] = array(
-        // We respect access rights defined in redirect.module here.
-        '#access' => user_access('administer redirects'),
-        '#type' => 'select',
-        '#title' => t('Create Redirect'),
-        '#description' => t('If you want to create an HTTP redirect from your branch terms to the trunk term, please, choose the HTTP redirect code here.'),
-        '#required' => TRUE,
-        '#options' => $options,
-        '#default_value' => TERM_MERGE_NO_REDIRECT,
-      );
-    }
-    else {
-      $form['redirect'] = array(
-        '#markup' => t('Enable the module <a href="http://drupal.org/project/redirect">Redirect</a> if you want to do an HTTP redirect from your term branch to the term trunk.'),
-      );
-    }
-
-    $form['step'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Step'),
-      '#description' => t('Please, specify how many terms to process per script run in batch. If you are hitting time or memory limits in your PHP, decrease this number.'),
-      '#default_value' => 40,
-      '#required' => TRUE,
-      '#element_validate' => array('element_validate_integer_positive'),
-    );
+    // Adding necessary options of merging.
+    $form += term_merge_merge_options_elements();
 
     $form['actions'] = array(
       '#type' => 'actions',
@@ -869,4 +842,218 @@ function term_merge_batch_finished($success, $results, $operations) {
     // An error happened. We have to notify the user.
     drupal_set_message(t('An error occurred. We are sorry, please, report this error to the maintainers of Term Merge module.'), 'error');
   }
+}
+
+/**
+ * Generate 'term_merge_duplicates_form'.
+ *
+ * Allow merging terms with the same name.
+ *
+ * @param object $vocabulary
+ *   Fully loaded taxonomy vocabulary object inside of which term merging occurs
+ */
+function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
+  $tree = taxonomy_get_tree($vocabulary->vid);
+
+  // Helpful and self explaining text that should help people understand what's
+  // up.
+  $form['help'] = array(
+    '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. The terms are grouped by names. Term into which the merging will occur is selected automatically as the highest term in the vocabulary tree among the found duplicates. It has to be the highest because we cannot merge terms into their children. Each group consists of table of found duplicates. Tick on the terms you would like to merge.') . '</p>'
+  );
+
+  // Array of groups of terms with the same name. Each group consists of an
+  // array of duplicates and a trunk term. Trunk term is chosen to be the
+  // highest in hierarchy - this way we can assure merging of all the druplicate
+  // terms will be successful, as we cannot merge into child of branch term.
+  $groups = array();
+  foreach ($tree as $term) {
+    $name = drupal_strtoupper($term->name);
+    if (!isset($groups[$name])) {
+      $groups[$name] = array(
+        'duplicates' => array(),
+        'trunk' => $term,
+      );
+    }
+    else {
+      if ($term->depth < $groups[$name]['trunk']->depth) {
+        // This is a better candidate for been trunk term. So we put current
+        // trunk into duplicates and we put the current $term as the trunk
+        // for this group.
+        $groups[$name]['duplicates'][] = $groups[$name]['trunk'];
+        $groups[$name]['trunk'] = $term;
+      }
+      else {
+        // It's not a better candidate for trunk term than the one we have right
+        // now, so we just add it as another duplicate.
+        $groups[$name]['duplicates'][] = $term;
+      }
+    }
+  }
+
+  $form['group'] = array(
+    '#tree' => TRUE,
+  );
+  foreach ($groups as $i => $group) {
+    if (!empty($group['duplicates'])) {
+      $form['group'][$i] = array(
+        '#type' => 'fieldset',
+        '#title' => $group['trunk']->name,
+        '#collapsible' => TRUE,
+      );
+
+      $options = array();
+      foreach ($group['duplicates'] as $term) {
+        $parents = array();
+        foreach (taxonomy_get_parents_all($term->tid) as $parent) {
+          // We do not include the current term in the hierarchy.
+          if ($parent->tid != $term->tid) {
+            $parents[] = $parent->name;
+          }
+        }
+        // Adding Root to the hierarchy.
+        $parents[] = t('Vocabulary Root');
+        $options[$term->tid] = array(
+          'id' => $term->tid,
+          'title' => l($term->name, 'taxonomy/term/' . $term->tid),
+          'description' => check_markup($term->description, $term->format),
+          'parents' => implode(' &raquo; ', $parents),
+        );
+      }
+
+      $form['group'][$i]['duplicates'] = array(
+        '#type' => 'tableselect',
+        '#title' => 'Duplicates',
+        '#header' => array(
+          'id' => t('ID'),
+          'title' => t('Title'),
+          'description' => t('Description'),
+          'parents' => t('Parents'),
+        ),
+        '#options' =>$options,
+      );
+
+      $form['group'][$i]['trunk'] = array(
+        '#type' => 'item',
+        '#title' => t('Merge Into'),
+        '#markup' => l($group['trunk']->name, 'taxonomy/term/' . $group['trunk']->tid),
+      );
+
+      $form['group'][$i]['trunk_tid'] = array(
+        '#type' => 'value',
+        '#value' => $group['trunk']->tid,
+      );
+    }
+  }
+
+  // Adding necessary options of merging.
+  $form += term_merge_merge_options_elements();
+
+  $form['actions'] = array(
+    '#type' => 'actions',
+  );
+
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  return $form;
+}
+
+function term_merge_duplicates_form_submit($form, &$form_state) {
+  $batch = array(
+    'title' => t('Merging terms'),
+    'operations' => array(),
+    'finished' => 'term_merge_batch_finished',
+  );
+
+  // Processing general options for merging.
+  $term_branch_keep = (bool) $form_state['values']['term_branch_keep'];
+  $merge_fields = (bool) $form_state['values']['merge_fields'];
+  $redirect = $form_state['values']['redirect'];
+  $step = (int) $form_state['values']['step'];
+
+  if (isset($form_state['values']['group'])) {
+    foreach ($form_state['values']['group'] as $values) {
+      // Filtering out only the selected duplicate terms.
+      $term_branches = array_intersect(array_values($values['duplicates']), array_keys($values['duplicates']));
+      if (!empty($term_branches)) {
+        // If something has been selected in this group we shecule its merging.
+        $batch['operations'][] = array('term_merge_batch_process', array(
+            $term_branches,
+            $values['trunk_tid'],
+            $term_branch_keep,
+            $merge_fields,
+            $redirect,
+            $step,
+          ),
+        );
+      }
+    }
+  }
+
+  if (empty($batch['operations'])) {
+    drupal_set_message(t('No merging has been made, because you have not selected any duplicate term to merge.'));
+  }
+  else {
+    batch_set($batch);
+  }
+}
+
+/**
+ * Generate and return form elements that control behavior of merge action.
+ *
+ * Output of this function should be used in any form that merges terms,
+ * ensuring unified interface.
+ *
+ * @retun array
+ *   Array of form elements that allow controlling term merge action
+ */
+function term_merge_merge_options_elements() {
+  $form = array();
+
+  $form['term_branch_keep'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Only merge occurrences'),
+    '#description' => t('Check this if you want to only merge the occurrences of the specified terms, i.e. the terms will not be deleted from your vocabulary.'),
+  );
+
+  $form['merge_fields'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Merge Term Fields'),
+    '#description' => t('Whether to the values of term trunk should be added the values of corresponding fields of term branch. The values will be added until the cardinality limit for each field is reached.'),
+  );
+
+  if (module_exists('redirect')) {
+    $options = array(TERM_MERGE_NO_REDIRECT => 'No redirect') + array(
+      0 => t('Default (@default)',
+        array('@default' => variable_get('redirect_default_status_code', 301))),
+    ) + redirect_status_code_options();
+    $form['redirect'] = array(
+      // We respect access rights defined in redirect.module here.
+      '#access' => user_access('administer redirects'),
+      '#type' => 'select',
+      '#title' => t('Create Redirect'),
+      '#description' => t('If you want to create an HTTP redirect from your branch terms to the trunk term, please, choose the HTTP redirect code here.'),
+      '#required' => TRUE,
+      '#options' => $options,
+      '#default_value' => TERM_MERGE_NO_REDIRECT,
+    );
+  }
+  else {
+    $form['redirect'] = array(
+      '#markup' => t('Enable the module <a href="http://drupal.org/project/redirect">Redirect</a> if you want to do an HTTP redirect from your term branch to the term trunk.'),
+    );
+  }
+
+  $form['step'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Step'),
+    '#description' => t('Please, specify how many terms to process per script run in batch. If you are hitting time or memory limits in your PHP, decrease this number.'),
+    '#default_value' => 40,
+    '#required' => TRUE,
+    '#element_validate' => array('element_validate_integer_positive'),
+  );
+
+  return $form;
 }

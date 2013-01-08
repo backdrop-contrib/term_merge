@@ -30,7 +30,7 @@ function term_merge_menu() {
     'type' => MENU_LOCAL_TASK,
   );
 
-  $items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/merge/regular'] = array(
+  $items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/merge/default'] = array(
     'title' => 'Default',
     'type' => MENU_DEFAULT_LOCAL_TASK,
   );
@@ -52,6 +52,19 @@ function term_merge_menu() {
     'weight' => 10,
   );
 
+  $items['taxonomy/term/%taxonomy_term/merge/default'] = array(
+    'title' => 'Default',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+
+  $items['taxonomy/term/%taxonomy_term/merge/duplicates'] = array(
+    'title' => 'Merge Duplicate Terms',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('term_merge_duplicates_form', 2),
+    'access arguments' => array('merge terms'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
   $items['term-merge/autocomplete/term-trunk/%taxonomy_vocabulary_machine_name'] = array(
     'title' => 'Autocomplete Term Merge form term trunk',
     'page callback' => 'term_merge_form_term_trunk_widget_autocomplete_autocomplete',
@@ -69,6 +82,7 @@ function term_merge_menu() {
 function term_merge_admin_paths() {
   return array(
     'taxonomy/term/*/merge' => TRUE,
+    'taxonomy/term/*/merge/*' => TRUE,
   );
 }
 
@@ -851,8 +865,15 @@ function term_merge_batch_finished($success, $results, $operations) {
  *
  * @param object $vocabulary
  *   Fully loaded taxonomy vocabulary object inside of which term merging occurs
+ *   or fully loaded taxonomy term object using which the function will pull up
+ *   the vocabulary inside of which term merging occurs
  */
 function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
+  // Checking if we were given vocabulary object, or term object.
+  if (isset($vocabulary->tid)) {
+    // It's term object, we have to substitute it with a vocabulary object.
+    $vocabulary = taxonomy_vocabulary_load($vocabulary->vid);
+  }
   $tree = taxonomy_get_tree($vocabulary->vid);
 
   // Helpful and self explaining text that should help people understand what's
@@ -960,6 +981,11 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
   return $form;
 }
 
+/**
+ * Submit handler for 'term_merge_duplicates_form'.
+ *
+ * Actually merge duplicate terms.
+ */
 function term_merge_duplicates_form_submit($form, &$form_state) {
   $batch = array(
     'title' => t('Merging terms'),
@@ -970,7 +996,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
   // Processing general options for merging.
   $term_branch_keep = (bool) $form_state['values']['term_branch_keep'];
   $merge_fields = (bool) $form_state['values']['merge_fields'];
-  $redirect = $form_state['values']['redirect'];
+  $redirect = isset($form_state['values']['redirect']) ? $form_state['values']['redirect'] : TERM_MERGE_NO_REDIRECT;
   $step = (int) $form_state['values']['step'];
 
   if (isset($form_state['values']['group'])) {

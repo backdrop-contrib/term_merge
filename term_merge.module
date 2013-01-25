@@ -1016,51 +1016,38 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
   // Helpful and self explaining text that should help people understand what's
   // up.
   $form['help'] = array(
-    '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. The terms are grouped by names. Term into which the merging will occur is selected automatically as the highest term in the vocabulary tree among the found duplicates. It has to be the highest because we cannot merge terms into their children. Each group consists of table of found duplicates. Tick on the terms you would like to merge.') . '</p>'
+    '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children. Each group consists of table of found duplicates. Tick on the terms you would like to merge and choose the term into which you want to merge the ticked on terms.') . '</p>'
   );
 
-  // Array of groups of terms with the same name. Each group consists of an
-  // array of duplicates and a trunk term. Trunk term is chosen to be the
-  // highest in hierarchy - this way we can assure merging of all the druplicate
-  // terms will be successful, as we cannot merge into child of branch term.
+  // Array of groups of terms with the same name. Each group is an array of
+  // duplicates. Trunk term of each group will be chosen by user.
   $groups = array();
   foreach ($tree as $term) {
-    $name = drupal_strtoupper($term->name);
+    $name = term_merge_duplicates_process_name($term->name);
     if (!isset($groups[$name])) {
-      $groups[$name] = array(
-        'duplicates' => array(),
-        'trunk' => $term,
-      );
+      $groups[$name] = array();
     }
-    else {
-      if ($term->depth < $groups[$name]['trunk']->depth) {
-        // This is a better candidate for been trunk term. So we put current
-        // trunk into duplicates and we put the current $term as the trunk
-        // for this group.
-        $groups[$name]['duplicates'][] = $groups[$name]['trunk'];
-        $groups[$name]['trunk'] = $term;
-      }
-      else {
-        // It's not a better candidate for trunk term than the one we have right
-        // now, so we just add it as another duplicate.
-        $groups[$name]['duplicates'][] = $term;
-      }
-    }
+    $groups[$name][] = $term;
   }
 
   $form['group'] = array(
     '#tree' => TRUE,
   );
+  // Whether there is at least one group of possible duplicate terms found.
+  $is_any = FALSE;
   foreach ($groups as $i => $group) {
-    if (!empty($group['duplicates'])) {
+    if (count($group) > 1) {
+      $is_any = TRUE;
+
       $form['group'][$i] = array(
         '#type' => 'fieldset',
-        '#title' => $group['trunk']->name,
+        '#title' => $group[0]->name,
         '#collapsible' => TRUE,
+        '#pre_render' => array('term_merge_duplicates_fieldset_preprocess'),
       );
 
       $options = array();
-      foreach ($group['duplicates'] as $term) {
+      foreach ($group as $term) {
         $parents = array();
         foreach (taxonomy_get_parents_all($term->tid) as $parent) {
           // We do not include the current term in the hierarchy.
@@ -1087,33 +1074,43 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
           'description' => t('Description'),
           'parents' => t('Parents'),
         ),
-        '#options' =>$options,
+        '#options' => $options,
       );
 
-      $form['group'][$i]['trunk'] = array(
-        '#type' => 'item',
-        '#title' => t('Merge Into'),
-        '#markup' => l($group['trunk']->name, 'taxonomy/term/' . $group['trunk']->tid),
-      );
-
+      $options = array();
+      foreach ($group as $term) {
+        $options[$term->tid] = $term->name;
+      }
       $form['group'][$i]['trunk_tid'] = array(
-        '#type' => 'value',
-        '#value' => $group['trunk']->tid,
+        '#type' => 'radios',
+        '#title' => t('Merge Into'),
+        '#required' => TRUE,
+        '#options' => $options,
       );
     }
   }
 
-  // Adding necessary options of merging.
-  $form += term_merge_merge_options_elements($vocabulary);
+  if ($is_any) {
+    // Adding necessary options of merging.
+    $form += term_merge_merge_options_elements();
 
-  $form['actions'] = array(
-    '#type' => 'actions',
-  );
+    $form['actions'] = array(
+      '#type' => 'actions',
+    );
 
-  $form['actions']['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Submit'),
-  );
+    $form['actions']['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Submit'),
+    );
+  }
+  else {
+    $form['nothing_found'] = array(
+      '#markup' => '<p><b>' . t('Sorry, seems like we were not able to find any possible duplicate terms in %vocabulary vocabulary.', array(
+        '%vocabulary' => $vocabulary->name,
+      )) . '</b></p>'
+    );
+  }
+
 
   return $form;
 }
@@ -1140,7 +1137,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
   if (isset($form_state['values']['group'])) {
     foreach ($form_state['values']['group'] as $values) {
       // Filtering out only the selected duplicate terms.
-      $term_branches = array_intersect(array_values($values['duplicates']), array_keys($values['duplicates']));
+      $term_branches = array_filter($values['duplicates']);
       if (!empty($term_branches)) {
         // If something has been selected in this group we shecule its merging.
         $batch['operations'][] = array('_term_merge_batch_process', array(
@@ -1163,6 +1160,52 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
   else {
     batch_set($batch);
   }
+}
+
+/**
+ * String process function.
+ *
+ * Manipulate supplied var $name and by the output of this function terms in a
+ * vocabulary are grouped as duplicates.
+ *
+ * @param string $name
+ *
+ * @return string
+ *   Processed string (normally it implies making it upper case, stripping down
+ *   any special chars, etc.)
+ */
+function term_merge_duplicates_process_name($name) {
+  // Making upper case.
+  $name = drupal_strtoupper($name);
+  // Trying transliteration, if available.
+  if (module_exists('transliteration')) {
+    $name = transliteration_get($name);
+    // Keeping only ASCII chars.
+    $name = preg_replace('#\W#', '', $name);
+  }
+  return $name;
+}
+
+/**
+ * Form element preprocess function.
+ *
+ * Inserts extra column for choosing term trunk into tableselect of terms to be
+ * merged.
+ */
+function term_merge_duplicates_fieldset_preprocess($element) {
+  $options = &$element['duplicates']['#options'];
+  foreach ($options as $tid => $row) {
+    $element['trunk'][$tid]['#title_display'] = 'invisible';
+    $options[$tid] = array(
+      'trunk' => drupal_render($element['trunk_tid'][$tid]),
+    ) + $options[$tid];
+  }
+  $element['trunk_tid']['#title_display'] = 'invisble';
+  $element['duplicates']['#header'] = array(
+    'trunk' => $element['trunk_tid']['#title'],
+  ) + $element['duplicates']['#header'];
+
+  return $element;
 }
 
 /**

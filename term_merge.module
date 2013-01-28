@@ -354,11 +354,6 @@ function term_merge_action($object, $context) {
  *   Array of the form
  */
 function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
-  // If there are more than this many terms in the vocabulary the default
-  // widget for term trunk field becomes autocomplete textfield instead of a
-  // select.
-  $term_trunk_widget_autocomplete_threshold = 100;
-
   if (is_null($vocabulary)) {
     $vocabulary = taxonomy_vocabulary_load($term->vid);
   }
@@ -368,22 +363,65 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
 
   if (!isset($form_state['storage']['confirm'])) {
     // We are at the set up step.
-    $tree = taxonomy_get_tree($vocabulary->vid);
-    $options = array();
-    foreach ($tree as $k => $v) {
-      $options[$v->tid] = str_repeat('-', $v->depth) . $v->name;
-      // Additionally we key the $tree by term->tid.
-      unset($tree[$k]);
-      $tree[$v->tid] = $v;
-    }
+
     $term_branch_value = is_null($term) ? NULL : array($term->tid);
+    if (variable_get('taxonomy_override_selector', FALSE) && module_exists('hs_taxonomy')) {
+      // We use Hierarchical Select module if it's available and configured to
+      // be used for taxonomy selects.
+      $form['term_branch'] = array(
+        '#type' => 'hierarchical_select',
+        // @todo: firgure out why #required => TRUE doesn't work.
+        // As a matter of fact, this issue seems to cover our case.
+        // http://drupal.org/node/1275862.
+        //'#required' => TRUE,
+        '#config' => array(
+          'module' => 'hs_taxonomy',
+          'params' => array(
+            'vid' => $vocabulary->vid,
+            'exclude_tid' => NULL,
+            'root_term'   => FALSE,
+          ),
+          'enforce_deepest' => 0,
+          'entity_count' => 0,
+          'require_entity' => 0,
+          'save_lineage' => 0,
+          'level_labels' => array(
+            'status' => 0,
+          ),
+          'dropbox' => array(
+            'status' => 1,
+            'limit' => 0,
+          ),
+          'editability' => array(
+            'status' => 0,
+          ),
+          'resizable' => TRUE,
+          'render_flat_select' => 0,
+        ),
+      );
+    }
+    else {
+      // Falling back on a simple <select>.
+      $tree = taxonomy_get_tree($vocabulary->vid);
+      $options = array();
+      foreach ($tree as $k => $v) {
+        $options[$v->tid] = str_repeat('-', $v->depth) . $v->name;
+        // Additionally we key the $tree by term->tid.
+        unset($tree[$k]);
+        $tree[$v->tid] = $v;
+      }
+      $form['term_branch'] = array(
+        '#type' => 'select',
+        '#required' => TRUE,
+        '#multiple' => TRUE,
+        '#options' => $options,
+        '#size' => 8,
+      );
+    }
+
     $form['term_branch'] = array(
-      '#type' => 'select',
       '#title' => t('Terms to Merge'),
-      '#required' => TRUE,
       '#description' => t('Please, choose the terms you want to merge into another term.'),
-      '#multiple' => TRUE,
-      '#options' => $options,
       '#ajax' => array(
         'callback' => 'term_merge_form_term_trunk',
         'wrapper' => 'term-merge-form-term-trunk',
@@ -391,8 +429,10 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
         'effect' => 'fade',
       ),
       '#default_value' => $term_branch_value,
-      '#size' => 8,
-    );
+    ) + $form['term_branch'];
+    if (is_null($form['term_branch']['#default_value'])) {
+      unset($form['term_branch']['#default_value']);
+    }
 
     $form['term_trunk'] = array(
       '#type' => 'fieldset',
@@ -405,10 +445,16 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     // Array of currently available widgets for choosing term trunk.
     $term_trunk_widget_options = array(
       'autocomplete' => 'Autocomplete',
-      'select' => 'Select',
     );
+    if (variable_get('taxonomy_override_selector', FALSE) && module_exists('hs_taxonomy')) {
+      $term_trunk_widget_options['hs_taxonomy'] = t('Hierarchical Select');
+      $term_trunk_widget = 'hs_taxonomy';
+    }
+    else {
+      $term_trunk_widget_options['select'] = t('Select');
+      $term_trunk_widget = 'select';
+    }
 
-    $term_trunk_widget = count($tree) > $term_trunk_widget_autocomplete_threshold ? 'autocomplete' : 'select';
     // Override the term trunk widget if settings are found in $form_state.
     if (isset($form_state['values']['term_trunk']['widget']) && in_array($form_state['values']['term_trunk']['widget'], array_keys($term_trunk_widget_options))) {
       $term_trunk_widget = $form_state['values']['term_trunk']['widget'];
@@ -444,6 +490,10 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
 
       case 'autocomplete':
         term_merge_form_term_trunk_widget_autocomplete($form, $form_state, $vocabulary);
+        break;
+
+      case 'hs_taxonomy':
+        term_merge_form_term_trunk_widget_hs_taxonomy($form, $form_state, $vocabulary);
         break;
     }
     // Ensuring the Merge Into form element has the same title no matter what
@@ -621,7 +671,9 @@ function term_merge_form_term_trunk_widget_select(&$form, &$form_state, $vocabul
     // which is basically identical but already has filtered out unwanted terms.
     // Plus we have to unset the 'New Term' option from $options.
     unset($options[TERM_MERGE_NEW_TERM_TRUNK]);
-    $form['term_trunk']['term_create']['relations']['parent']['#options'] = array_slice($form['term_trunk']['term_create']['relations']['parent']['#options'], 0, 1, TRUE) + $options;
+    if (is_array($form['term_trunk']['term_create']['relations']['parent']['#options'])) {
+      $form['term_trunk']['term_create']['relations']['parent']['#options'] = array_slice($form['term_trunk']['term_create']['relations']['parent']['#options'], 0, 1, TRUE) + $options;
+    }
 
     // For each field attached to taxonomy term of this vocabualry that has
     // unlimited cardinality we have to extra process the results, otherwise
@@ -660,6 +712,47 @@ function term_merge_form_term_trunk_widget_autocomplete(&$form, &$form_state, $v
 /**
  * Supportive function.
  *
+ * Generate form element for hierarchical select widget for term trunk element
+ * of the term_merge_form().
+ *
+ * @param object $vocabulary
+ *   Fully loaded taxonomy vocabulary object
+ */
+function term_merge_form_term_trunk_widget_hs_taxonomy(&$form, &$form_state, $vocabulary) {
+  $form['term_trunk']['tid'] = array(
+    '#type' => 'hierarchical_select',
+    '#description' => t('Please select a term to merge into.'),
+    '#required' => TRUE,
+    '#element_validate' => array('term_merge_form_trunk_term_widget_hs_taxonomy_validate'),
+    '#config' => array(
+      'module' => 'hs_taxonomy',
+      'params' => array(
+        'vid' => $vocabulary->vid,
+        'exclude_tid' => NULL,
+        'root_term'   => FALSE,
+      ),
+      'enforce_deepest' => 0,
+      'entity_count' => 0,
+      'require_entity' => 0,
+      'save_lineage' => 0,
+      'level_labels' => array(
+        'status' => 0,
+      ),
+      'dropbox' => array(
+        'status' => 0,
+      ),
+      'editability' => array(
+        'status' => 0,
+      ),
+      'resizable' => TRUE,
+      'render_flat_select' => 0,
+    ),
+  );
+}
+
+/**
+ * Supportive function.
+ *
  * Validate form element of the autocomplete widget of term trunk element of
  * the form term_merge_form(). Make sure the enetered string is a name of one of
  * the existing terms in the vocabulary where the merge occurs. If term is found
@@ -682,6 +775,21 @@ function term_merge_form_trunk_term_widget_autocomplete_validate($element, &$for
     $term = array_pop($term);
     form_set_value($element, $term->tid, $form_state);
   }
+}
+
+/**
+ * Supportive function.
+ *
+ * Validate form element of the Hierarchical Select widget of term trunk element
+ * of the form term_merge_form(). Convert the value from array to a single tid
+ * integer value.
+ */
+function term_merge_form_trunk_term_widget_hs_taxonomy_validate($element, &$form_state, $form) {
+  $tid = 0;
+  if (is_array($element['#value']) && !empty($element['#value'])) {
+  $tid = (int) array_pop($element['#value']);
+  }
+  form_set_value($element, $tid, $form_state);
 }
 
 /**

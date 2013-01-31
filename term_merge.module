@@ -770,7 +770,7 @@ function term_merge($term_branch, $term_trunk, $term_branch_keep = FALSE, $merge
   $batch = array(
     'title' => t('Merging terms'),
     'operations' => array(
-      array('term_merge_batch_process', array(
+      array('_term_merge_batch_process', array(
         $term_branch,
         $term_trunk,
         $term_branch_keep,
@@ -813,7 +813,7 @@ function term_merge($term_branch, $term_trunk, $term_branch_keep = FALSE, $merge
  * @param array $context
  *   Drupal Batch API context array
  */
-function term_merge_batch_process($term_branch, $term_trunk, $term_branch_keep, $merge_fields, $redirect, $step, &$context) {
+function _term_merge_batch_process($term_branch, $term_trunk, $term_branch_keep, $merge_fields, $redirect, $step, &$context) {
   // Initializing sandbox.
   if (!isset($context['sandbox']['current'])) {
     $context['sandbox']['current'] = 0;
@@ -1005,7 +1005,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
       $term_branches = array_intersect(array_values($values['duplicates']), array_keys($values['duplicates']));
       if (!empty($term_branches)) {
         // If something has been selected in this group we shecule its merging.
-        $batch['operations'][] = array('term_merge_batch_process', array(
+        $batch['operations'][] = array('_term_merge_batch_process', array(
             $term_branches,
             $values['trunk_tid'],
             $term_branch_keep,

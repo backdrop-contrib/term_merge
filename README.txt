@@ -24,6 +24,9 @@ Currently module integrates with the following core and contributed modules:
  * Redirect module (http://drupal.org/project/redirect). During term merging
  you may set up SEO friendly redirects from the branch terms to point to the
  trunk term
+ * Synonyms module (http://drupal.org/project/synonyms). During term merging
+ you will be able to choose a trunk term's field into which all the branch terms
+ will be added as synonyms (until cardinality limit for that field is reached).
 
 Requirements
 -------------

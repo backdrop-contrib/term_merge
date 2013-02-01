@@ -884,7 +884,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
   public function getInfo() {
     return array(
       'name' => 'Redirect module integration',
-      'description' => 'Ensure that the module Term Merge integrates with <a href="http://drupal.org/project/redirect">Redirect</a>/Path modules correctly.',
+      'description' => 'Ensure that the module Term Merge integrates with ' . l('Redirect', 'http://drupal.org/project/redirect') . '/Path modules correctly.',
       'group' => 'Term Merge',
     );
   }
@@ -904,7 +904,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->assertPattern('#\<select[^>]+name="redirect"[^>]*\>#i', 'Redirection settings are available for user that possesses corresponding permissions.');
 
     // Making sure redirect settings are not available during merging when
-    // merging.
+    // merging with disabled Redirect module.
     module_disable(array('redirect'));
     $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertNoPattern('#\<select[^>]+name="redirect"[^>]*\>#i', 'No redirection settings are available when the redirect module is disabled.');
@@ -1067,6 +1067,186 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
       $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/add', array(
         'name' => $this->randomName(),
         'path[alias]' => $v . $this->randomName(),
+      ), 'Save');
+      $return[$v] = $this->getLastTerm($this->vocabulary);
+    }
+
+    return $return;
+  }
+}
+
+/**
+ * Test the integration between Term Merge module and Synonyms module.
+ */
+class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
+
+  /**
+   * SetUp method.
+   */
+  public function setUp() {
+    parent::setUp(array('synonyms'));
+    // Additionally we enable default synonyms field in the vocabulary.
+    $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/edit', array(
+      'synonyms[synonyms][' . SYNONYMS_DEFAULT_FIELD_NAME . ']' => TRUE,
+    ), 'Save');
+  }
+
+  /**
+   * GetInfo method.
+   */
+  public function getInfo() {
+    return array(
+      'name' => 'Synonyms module integration',
+      'description' => 'Ensure that the module Term Merge integrates with ' . l('Synonyms', 'http://drupal.org/project/synonyms') . ' module correctly.',
+      'group' => 'Term Merge',
+    );
+  }
+
+  /**
+   * Test disabled Synonyms module.
+   */
+  /*public function testDisabled() {
+    // Making sure synonyms settings are not available during merging when
+    // merging with disabled Synonyms module.
+    module_disable(array('synonyms'));
+    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
+    $this->assertNoText(t('Add as Synonyms'), 'No synonyms settings are available when the Synonyms module is disabled.');
+  }*/
+
+  /**
+   * Test the action 'term_merge_action' in terms of integration with Synonyms.
+   */
+  /*public function testTermMergeAction() {
+    $this->drupalLogin($this->admin);
+    $terms = $this->createTerms(array('branch', 'trunk'));
+
+    // Testing default value.
+    actions_do('term_merge_action', $terms['branch'], array(
+      'term_trunk' => $terms['trunk']->tid,
+      'term_branch_keep' => TRUE,
+    ));
+    $this->assertSynonymsIntegration($terms, 'By default no synonyms should be added.');
+
+    // Testing no synonyms adding.
+    actions_do('term_merge_action', $terms['branch'], array(
+      'term_trunk' => $terms['trunk']->tid,
+      'term_branch_keep' => TRUE,
+      'synonyms' => array(),
+    ));
+    $this->assertSynonymsIntegration($terms, 'No synonyms are added, if action is not instructed to make ones.');
+
+    // Testing adding as a synonym.
+    actions_do('term_merge_action', $terms['branch'], array(
+      'term_trunk' => $terms['trunk']->tid,
+      'synonyms' => array(SYNONYMS_DEFAULT_FIELD_NAME),
+    ));
+
+    $terms['trunk']->synonyms = array($terms['branch']->name);
+    $this->assertSynonymsIntegration($terms, 'Synonyms are added, if action is instructed to add ones.');
+  }*/
+
+  /**
+   * Test Term Merge batch in terms of integration with Redirect/Path modules.
+   */
+  public function testTermMergeBatch() {
+    // Trying to merge without synonyms adding.
+    $terms = $this->createTerms(array('branch', 'trunk'));
+    $this->drupalPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
+      'term_branch[]' => array($terms['branch']->tid),
+      'term_trunk[widget]' => 'select',
+      'term_trunk[tid]' => $terms['trunk']->tid,
+      'term_branch_keep' => TRUE,
+      'synonyms[' . SYNONYMS_DEFAULT_FIELD_NAME . ']' => FALSE,
+    ), 'Submit');
+    $this->drupalPost(NULL, array(), 'Confirm');
+    $this->assertSynonymsIntegration($terms, 'No synonyms are added after running merge batch when not instructed to add synonyms.');
+
+    // Trying to merge into an existing term with synonyms adding.
+    $this->drupalPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
+      'term_branch[]' => array($terms['branch']->tid),
+      'term_trunk[widget]' => 'select',
+      'term_trunk[tid]' => $terms['trunk']->tid,
+      'term_branch_keep' => TRUE,
+      'synonyms[' . SYNONYMS_DEFAULT_FIELD_NAME . ']' => TRUE,
+    ), 'Submit');
+    $terms['trunk']->synonyms = array($terms['branch']->name);
+    $this->drupalPost(NULL, array(), 'Confirm');
+    $this->assertSynonymsIntegration($terms, 'Synonyms are added after running merge batch merging into an existing term, when instructed to add synonyms.');
+
+    // Trying to merge into a new term with synonyms adding.
+    $terms = $this->createTerms(array('branch'));
+    $this->drupalPostAJAX('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
+      'term_branch[]' => array($terms['branch']->tid),
+      'term_trunk[widget]' => 'select',
+      'term_branch_keep' => TRUE,
+      'term_trunk[tid]' => TERM_MERGE_NEW_TERM_TRUNK,
+    ), 'term_trunk[tid]');
+
+    $this->drupalPost(NULL, array(
+      'term_branch[]' => array($terms['branch']->tid),
+      'term_trunk[widget]' => 'select',
+      'term_trunk[tid]' => TERM_MERGE_NEW_TERM_TRUNK,
+      'term_branch_keep' => TRUE,
+      'name' => $this->randomName(),
+      'synonyms[' . SYNONYMS_DEFAULT_FIELD_NAME . ']' => TRUE,
+    ), 'Submit');
+    $this->drupalPost(NULL, array(), 'Confirm');
+    $terms['trunk'] = $this->getLastTerm($this->vocabulary);
+    $terms['trunk']->synonyms = array($terms['branch']->name);
+    $this->assertSynonymsIntegration($terms, 'Synonyms are added after running merge batch merging into a new term, when instructed to add synonyms.');
+  }
+
+  /**
+   * Supportive function.
+   *
+   * Assert expected results after doing any test actions.
+   *
+   * @param array $terms
+   *   Array of terms as returned by $this->createTerms(). Those term trunks
+   *   that have merged any branch terms with "Synonyms" option on, besides all
+   *   normal keys should have property 'synonyms' which should be an array of
+   *   expected synonyms of this term
+   * @param string $message
+   *   Assert message to be shown on test results page
+   */
+  protected function assertSynonymsIntegration($terms, $message) {
+    drupal_static_reset();
+    foreach ($terms as $term) {
+      // Getting an array of synonyms according to Synonyms module.
+      $synonyms = array();
+      foreach (synonyms_get_term_synonyms(taxonomy_term_load($term->tid)) as $tmp) {
+        $synonyms[] = $tmp['value'];
+      }
+
+      $expected_synonyms = isset($term->synonyms) ? $term->synonyms : array();
+      // Comparing $synonyms to $expected_synonyms.
+      if (count($expected_synonyms) != count(array_intersect($expected_synonyms, $synonyms))) {
+        $this->fail($message);
+        return;
+      }
+    }
+    // If we got here, then all expected synonyms were found.
+    $this->pass($message);
+  }
+
+  /**
+   * Supportive method.
+   *
+   * Create a list of terms, assigning names according to the values of the
+   * supplied array.
+   *
+   * @param array $terms
+   *   Array of machine readable term keys based on which is generated output
+   *
+   * @return array
+   *   Array of taxonomy term objects name of which is equal to the value that
+   *   corresponds to it position in the supplied array
+   */
+  protected function createTerms($terms) {
+    $return = array();
+    foreach ($terms as $v) {
+      $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/add', array(
+        'name' => $v,
       ), 'Save');
       $return[$v] = $this->getLastTerm($this->vocabulary);
     }

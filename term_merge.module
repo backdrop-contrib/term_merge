@@ -554,6 +554,7 @@ function term_merge_form_submit($form, &$form_state) {
     // really wants to do this.
     $form_state['storage']['confirm'] = 0;
     $form_state['rebuild'] = TRUE;
+
     // Before storing the submitted values we slightly preprocess them to make
     // sure they correspond to what is expected by submit handler of taxonomy
     // creation form.

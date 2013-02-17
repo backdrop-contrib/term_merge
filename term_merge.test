@@ -776,9 +776,15 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
     // Deciding what terms to merge.
     $edit = array();
     foreach ($groups as $name => $terms) {
-      $edit_key = drupal_strtoupper($name);
+      $edit_key = term_merge_duplicates_process_name($name);
+      // Firstly we pick the trunk term, to make it easier, let it be the 1st
+      // term of available collection.
+      $edit['group[' . $edit_key . '][trunk_tid]'] = $terms[0]->tid;
       switch ($name) {
         case 'single':
+          // For this case we do not expect to merge anything, so we just revert
+          // our selected trunk term.
+          unset($edit['group[' . $edit_key . '][trunk_tid]']);
           break;
 
         case 'double':

@@ -546,7 +546,7 @@ function term_merge_form_validate($form, &$form_state) {
       }
     }
     if (in_array($form_state['values']['term_trunk']['tid'], $prohibited_trunks)) {
-      form_error($form['term_trunk']['tid'], t('Trunk term cannot be on of the selected branch terms or their children.'));
+      form_error($form['term_trunk']['tid'], t('Trunk term cannot be one of the selected branch terms or their children.'));
     }
   }
 }
@@ -586,7 +586,7 @@ function term_merge_form_submit($form, &$form_state) {
     }
 
     $redirect = isset($form_state['values']['redirect']) ? $form_state['values']['redirect'] : TERM_MERGE_NO_REDIRECT;
-    $synonyms = array_values(array_filter($form_state['values']['synonyms']));
+    $synonyms = isset($form_state['values']['synonyms']) ? array_values(array_filter($form_state['values']['synonyms'])) : array();
     term_merge(array_values($form_state['values']['term_branch']), $term_trunk->tid, (bool) $form_state['values']['term_branch_keep'], (bool) $form_state['values']['merge_fields'], $redirect, $synonyms, (int) $form_state['values']['step']);
 
     $form_state['redirect'] = array('admin/structure/taxonomy/' . $term_trunk->vocabulary_machine_name);
@@ -794,7 +794,7 @@ function term_merge_form_trunk_term_widget_autocomplete_validate($element, &$for
 function term_merge_form_trunk_term_widget_hs_taxonomy_validate($element, &$form_state, $form) {
   $tid = 0;
   if (is_array($element['#value']) && !empty($element['#value'])) {
-  $tid = (int) array_pop($element['#value']);
+    $tid = (int) array_pop($element['#value']);
   }
   form_set_value($element, $tid, $form_state);
 }
@@ -1044,6 +1044,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
         '#title' => $group[0]->name,
         '#collapsible' => TRUE,
         '#pre_render' => array('term_merge_duplicates_fieldset_preprocess'),
+        '#element_validate' => array('term_merge_duplicates_fieldset_validate'),
       );
 
       $options = array();
@@ -1084,7 +1085,6 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
       $form['group'][$i]['trunk_tid'] = array(
         '#type' => 'radios',
         '#title' => t('Merge Into'),
-        '#required' => TRUE,
         '#options' => $options,
       );
     }
@@ -1092,7 +1092,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
 
   if ($is_any) {
     // Adding necessary options of merging.
-    $form += term_merge_merge_options_elements();
+    $form += term_merge_merge_options_elements($vocabulary);
 
     $form['actions'] = array(
       '#type' => 'actions',
@@ -1131,7 +1131,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
   $term_branch_keep = (bool) $form_state['values']['term_branch_keep'];
   $merge_fields = (bool) $form_state['values']['merge_fields'];
   $redirect = isset($form_state['values']['redirect']) ? $form_state['values']['redirect'] : TERM_MERGE_NO_REDIRECT;
-  $synonyms = array_values(array_filter($form_state['values']['synonyms']));
+  $synonyms = isset($form_state['values']['synonyms']) ? array_values(array_filter($form_state['values']['synonyms'])) : array();
   $step = (int) $form_state['values']['step'];
 
   if (isset($form_state['values']['group'])) {
@@ -1139,7 +1139,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
       // Filtering out only the selected duplicate terms.
       $term_branches = array_filter($values['duplicates']);
       if (!empty($term_branches)) {
-        // If something has been selected in this group we shecule its merging.
+        // If something has been selected in this group we schedule its merging.
         $batch['operations'][] = array('_term_merge_batch_process', array(
             $term_branches,
             $values['trunk_tid'],
@@ -1169,6 +1169,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
  * vocabulary are grouped as duplicates.
  *
  * @param string $name
+ *   String that needs to be manipulated
  *
  * @return string
  *   Processed string (normally it implies making it upper case, stripping down
@@ -1206,6 +1207,22 @@ function term_merge_duplicates_fieldset_preprocess($element) {
   ) + $element['duplicates']['#header'];
 
   return $element;
+}
+
+/**
+ * FAPI element validation callback.
+ *
+ * Validate fieldset of a 'term_merge_duplicates_form' form, if any duplicate
+ * has been selected for merging, it makes sure the trunk term has been
+ * selected. We can't allow merging without knownig the explicit trunk term.
+ */
+function term_merge_duplicates_fieldset_validate($element, &$form_state, $form) {
+  if (!empty($element['duplicates']['#value']) && !is_numeric($element['trunk_tid']['#value'])) {
+    form_error($element, t('Please, choose %trunk_tid_label for the group %group_label', array(
+      '%trunk_tid_label' => $element['trunk_tid']['#title'],
+      '%group_label' => $element['#title'],
+    )));
+  }
 }
 
 /**
@@ -1267,7 +1284,7 @@ function term_merge_merge_options_elements($vocabulary) {
     $form['synonyms'] = array(
       '#type' => 'checkboxes',
       '#title' => t('Add as Synonyms'),
-      '#description' => '<p>' . t('Synonyms module allows you to add branch terms as synonyms into any of fields, enabled as sources of synonyms in vocabulary. Check the fields into which you would like to add branch terms as synonyms. <b>Important note:</b> the values will be added until the cardinality limit for the selected fields is reached.') . '</p>',
+      '#description' => t('Synonyms module allows you to add branch terms as synonyms into any of fields, enabled as sources of synonyms in vocabulary. Check the fields into which you would like to add branch terms as synonyms. <b>Important note:</b> the values will be added until the cardinality limit for the selected fields is reached.'),
       '#options' => $options,
     );
   }

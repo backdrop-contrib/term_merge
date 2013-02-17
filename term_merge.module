@@ -568,6 +568,7 @@ function term_merge_form_submit($form, &$form_state) {
       $form_state['values'] += $form_state['values']['relations'];
     }
     $form_state['storage']['info'] = $form_state['values'];
+    $form_state['storage']['merge_settings'] = term_merge_merge_options_submit($form, $form_state, $form);
     $form_state['storage']['old_form'] = $form;
   }
   else {
@@ -585,9 +586,7 @@ function term_merge_form_submit($form, &$form_state) {
       $term_trunk = taxonomy_term_load($form_state['values']['term_trunk']['tid']);
     }
 
-    $redirect = isset($form_state['values']['redirect']) ? $form_state['values']['redirect'] : TERM_MERGE_NO_REDIRECT;
-    $synonyms = isset($form_state['values']['synonyms']) ? array_values(array_filter($form_state['values']['synonyms'])) : array();
-    term_merge(array_values($form_state['values']['term_branch']), $term_trunk->tid, (bool) $form_state['values']['term_branch_keep'], (bool) $form_state['values']['merge_fields'], $redirect, $synonyms, (int) $form_state['values']['step']);
+    term_merge(array_values($form_state['values']['term_branch']), $term_trunk->tid, $form_state['storage']['merge_settings']);
 
     $form_state['redirect'] = array('admin/structure/taxonomy/' . $term_trunk->vocabulary_machine_name);
   }
@@ -869,28 +868,38 @@ function term_merge_form_term_trunk_term_create($form, $form_state) {
  *   A single term tid or an array of term tids to be merged, aka term branches
  * @param int $term_trunk
  *   The tid of the term to merge term branches into, aka term trunk
- * @param bool $term_branch_keep
- *   Whether the term branches should not be deleted, also known as "merge only
- *   occurrences" option
- * @param bool $merge_fields
- *   Whether the fields from branch terms should be merged into the fields of
- *   term trunk (until each field's cardinality limit is reached)
- * @param int $redirect
- *   HTTP code for redirect from $term_branch to $term_trunk, 0 stands for the
- *   default redirect defined in Redirect module. Use constant
- *   TERM_MERGE_NO_REDIRECT to denote not creating any HTTP redirect.
- *   Note: this parameter requires Redirect module enabled, otherwise it will
- *   be disgarded
- * @param array $synonyms
- *   Array of field names of trunk term into which branch terms should be
- *   added as synonyms (until each field's cardinality limit is reached).
- *   Note: this parameter requires Synonyms module enabled, otherwise it will
- *   be disgarded
- * @param int $step
- *   How many term branches to merge per script run in batch. If you are hitting
- *   time or memory limits, decrease this parameter
+ * @param array $merge_settings
+ *   Array of settings that control how merging should happen. Currently
+ *   supported settings are:
+ *     term_branch_keep - (bool) Whether the term branches should not be
+ *       deleted, also known as "merge only occurrences" option
+ *     merge_fields - (bool) Whether the fields from branch terms should be
+ *       merged into the fields of term trunk (until each field's cardinality
+ *       limit is reached)
+ *     redirect - (int) HTTP code for redirect from $term_branch to $term_trunk,
+ *       0 stands for the default redirect defined in Redirect module. Use
+ *       constant TERM_MERGE_NO_REDIRECT to denote not creating any HTTP
+ *       redirect. Note: this parameter requires Redirect module enabled,
+ *       otherwise it will be disregarded
+ *     synonyms - (array) Array of field names of trunk term into which branch
+ *       terms should be added as synonyms (until each field's cardinality limit
+ *       is reached). Note: this parameter requires Synonyms module enabled,
+ *       otherwise it will be disregarded
+ *     step - (int) How many term branches to merge per script run in batch. If
+ *       you are hitting time or memory limits, decrease this parameter
  */
-function term_merge($term_branch, $term_trunk, $term_branch_keep = FALSE, $merge_fields = TRUE, $redirect = TERM_MERGE_NO_REDIRECT, $synonnyms = array(), $step = 40) {
+function term_merge($term_branch, $term_trunk, $merge_settings = array()) {
+  // Older versions of this module had another interface of this function,
+  // as backword capability we still support the older interface, which was
+  // instead of supplying a $merge_settings array supplying all the settings
+  // as additional function arguments.
+  // @todo: delete this backword capability at some point.
+  if (!is_array($merge_settings)) {
+    $merge_settings = array(
+      'term_branch_keep' => $merge_settings,
+    );
+  }
+
   // Create an array of sources if it isn't yet.
   if (!is_array($term_branch)) {
     $term_branch = array($term_branch);
@@ -903,11 +912,7 @@ function term_merge($term_branch, $term_trunk, $term_branch_keep = FALSE, $merge
       array('_term_merge_batch_process', array(
         $term_branch,
         $term_trunk,
-        $term_branch_keep,
-        $merge_fields,
-        $redirect,
-        $synonnyms,
-        $step,
+        $merge_settings,
       )),
     ),
     'finished' => 'term_merge_batch_finished',
@@ -926,49 +931,57 @@ function term_merge($term_branch, $term_trunk, $term_branch_keep = FALSE, $merge
  *   An array of term tids to be merged, aka term branches
  * @param int $term_trunk
  *   The tid of the term to merge term branches into, aka term trunk
- * @param bool $term_branch_keep
- *   Whether the term branches should be kept in vocabulary after updating
- *   all taxonomy term reference fields
- * @param bool $merge_fields
- *   Whether to the values of term trunk should be added values of
- *   corresponding fields of term branch. The values will be added until
- *   the cardinality limit for each field is reached.
- * @param int $redirect
- *   HTTP code for redirect from $term_branch to $term_trunk. 0 stands for the
- *   default redirect defined in Redirect module. Use TERM_MERGE_NO_REDIRECT to
- *   denote not creating HTTP redirect. Note: this setting requires Redirect
- *   module
- * @param array $synonyms
- *   Array of field names of trunk term into which branch terms should be
- *   added as synonyms (until each field's cardinality limit is reached).
- *   Note: this parameter requires Synonyms module enabled, otherwise it will
- *   be disgarded
- * @param int $step
- *   How many term branches to process per script run in batch. If you are
- *   hitting time or memory limits, decrease this parameter
+ * @param array $merge_settings
+ *   Array of settings that control how merging should happen. Currently
+ *   supported settings are:
+ *     term_branch_keep - (bool) Whether the term branches should not be
+ *       deleted, also known as "merge only occurrences" option
+ *     merge_fields - (bool) Whether the fields from branch terms should be
+ *       merged into the fields of term trunk (until each field's cardinality
+ *       limit is reached)
+ *     redirect - (int) HTTP code for redirect from $term_branch to $term_trunk,
+ *       0 stands for the default redirect defined in Redirect module. Use
+ *       constant TERM_MERGE_NO_REDIRECT to denote not creating any HTTP
+ *       redirect. Note: this parameter requires Redirect module enabled,
+ *       otherwise it will be disregarded
+ *     synonyms - (array) Array of field names of trunk term into which branch
+ *       terms should be added as synonyms (until each field's cardinality limit
+ *       is reached). Note: this parameter requires Synonyms module enabled,
+ *       otherwise it will be disregarded
+ *     step - (int) How many term branches to merge per script run in batch. If
+ *       you are hitting time or memory limits, decrease this parameter
  * @param array $context
  *   Drupal Batch API context array
  */
-function _term_merge_batch_process($term_branch, $term_trunk, $term_branch_keep, $merge_fields, $redirect, $synonyms, $step, &$context) {
+function _term_merge_batch_process($term_branch, $term_trunk, $merge_settings, &$context) {
   // Initializing sandbox.
   if (!isset($context['sandbox']['current'])) {
     $context['sandbox']['current'] = 0;
   }
 
+  // Populating $merge_settings with defaults.
+  $merge_settings += array(
+    'term_branch_keep' => FALSE,
+    'merge_fields' => FALSE,
+    'redirect' => TERM_MERGE_NO_REDIRECT,
+    'synonyms' => array(),
+    'step' => 40,
+  );
+
   $total = count($term_branch);
   // To speed up the process we take advantage of taxonomy_term_load_multiple()
   // instead of just repeating calls to taxonomy_term_load().
-  $till = min($total, $context['sandbox']['current'] + $step);
+  $till = min($total, $context['sandbox']['current'] + $merge_settings['step']);
   $length = $till - $context['sandbox']['current'];
   array_slice($term_branch, $context['sandbox']['current'], $length);
   $term_branch = array_values(taxonomy_term_load_multiple($term_branch));
-  for ($i = 0; $i < $step && $context['sandbox']['current'] < $total; $i++) {
+  for ($i = 0; $i < $merge_settings['step'] && $context['sandbox']['current'] < $total; $i++) {
     actions_do('term_merge_action', $term_branch[$i], array(
       'term_trunk' => $term_trunk,
-      'term_branch_keep' => $term_branch_keep,
-      'merge_fields' => $merge_fields,
-      'redirect' => $redirect,
-      'synonyms' => $synonyms,
+      'term_branch_keep' => $merge_settings['term_branch_keep'],
+      'merge_fields' => $merge_settings['merge_fields'],
+      'redirect' => $merge_settings['redirect'],
+      'synonyms' => $merge_settings['synonyms'],
     ));
     $context['sandbox']['current']++;
   }
@@ -1128,11 +1141,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
   );
 
   // Processing general options for merging.
-  $term_branch_keep = (bool) $form_state['values']['term_branch_keep'];
-  $merge_fields = (bool) $form_state['values']['merge_fields'];
-  $redirect = isset($form_state['values']['redirect']) ? $form_state['values']['redirect'] : TERM_MERGE_NO_REDIRECT;
-  $synonyms = isset($form_state['values']['synonyms']) ? array_values(array_filter($form_state['values']['synonyms'])) : array();
-  $step = (int) $form_state['values']['step'];
+  $merge_settings = term_merge_merge_options_submit($form, $form_state, $form);
 
   if (isset($form_state['values']['group'])) {
     foreach ($form_state['values']['group'] as $values) {
@@ -1143,11 +1152,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
         $batch['operations'][] = array('_term_merge_batch_process', array(
             $term_branches,
             $values['trunk_tid'],
-            $term_branch_keep,
-            $merge_fields,
-            $redirect,
-            $synonyms,
-            $step,
+            $merge_settings,
           ),
         );
       }
@@ -1229,15 +1234,21 @@ function term_merge_duplicates_fieldset_validate($element, &$form_state, $form) 
  * Generate and return form elements that control behavior of merge action.
  *
  * Output of this function should be used in any form that merges terms,
- * ensuring unified interface.
+ * ensuring unified interface. It should be used in conjunction with
+ * term_merge_merge_options_submit(), which will process the submitted values
+ * for you and return an array of merge settings.
  *
  * @param object $vocabulary
  *   Fully loaded taxonomy vocabulary object in which merging occurs
  *
  * @return array
  *   Array of form elements that allow controlling term merge action
+ *
+ * @see term_merge_merge_options_submit()
  */
 function term_merge_merge_options_elements($vocabulary) {
+  // @todo: it would be nice to provide some ability to supply default values
+  // for each setting.
   $form = array();
 
   $form['term_branch_keep'] = array(
@@ -1304,4 +1315,38 @@ function term_merge_merge_options_elements($vocabulary) {
   );
 
   return $form;
+}
+/**
+ * Return merge settings array.
+ *
+ * Output of this function should be used for supplying into term_merge()
+ * function or for triggering actions_do('term_merge_action', ...) action. This
+ * function should be invoked in a form submit hanlder for a form that used
+ * term_merge_merge_options_elements() for generating merge settings elements.
+ * It will process data and return an array of merge settings, according to the
+ * data user has submitted in your form.
+ *
+ * @param array $merge_settings_element
+ *   That part of form that was generated by term_merge_merge_options_elements()
+ * @param array $form_state
+ *   Form state array of the submitted form
+ * @param array $form
+ *   Form array of the submitted form
+ *
+ * @return array
+ *   Array of merge settings that can be used for calling term_merge() or
+ *   invoking 'term_merge_action' action
+ *
+ * @see term_merge_merge_options_elements()
+ */
+function term_merge_merge_options_submit($merge_settings_element, &$form_state, $form) {
+  $merge_settings = array(
+    'redirect' => isset($merge_settings_element['redirect']['#value']) ? $merge_settings_element['redirect']['#value'] : TERM_MERGE_NO_REDIRECT,
+    'synonyms' => isset($merge_settings_element['synonyms']['#value']) ? array_values(array_filter($merge_settings_element['synonyms']['#value'])) : array(),
+    'term_branch_keep' => (bool) $merge_settings_element['term_branch_keep']['#value'],
+    'merge_fields' => (bool) $merge_settings_element['merge_fields']['#value'],
+    'step' => (int) $merge_settings_element['step']['#value'],
+  );
+
+  return $merge_settings;
 }

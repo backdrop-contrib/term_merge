@@ -565,7 +565,10 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
 
           // Making sure for the term trunk autocomplete widget doesn't allow to
           // submit any of the selected term branches nor their children.
-          $prohibited_terms = array('parent' => 'Merging into the same term is not allowed in autocomplete widget for term trunk.', 'child' => 'Merging into any of child of selected branch terms is not allowed in autocomplete widget for term trunk.');
+          $prohibited_terms = array(
+            'parent' => 'Merging into the same term is not allowed in autocomplete widget for term trunk.',
+            'child' => 'Merging into any of child of selected branch terms is not allowed in autocomplete widget for term trunk.',
+          );
           foreach ($prohibited_terms as $term => $assert_message) {
             $term = $terms[$term];
             $this->drupalGet($init_url);
@@ -578,7 +581,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
               'term_trunk[widget]' => $term_trunk_widget,
               'term_trunk[tid]' => $term->name,
             ), 'Submit');
-            $this->assertText('Trunk term cannot be on of the selected branch terms or their children', $assert_message);
+            $this->assertText('Trunk term cannot be one of the selected branch terms or their children', $assert_message);
           }
           break;
       }

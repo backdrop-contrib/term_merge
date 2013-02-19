@@ -15,8 +15,10 @@ synonymous terms, thereby pruning the taxonomy to a more manageable set.
 This module allows you to merge multiple terms into one, while updating
 all fields referring to those terms to refer to the replacement term instead.
 
-Currently, the module only acts on fields. It would be desirable to update
-other possible places where deleted terms are used.
+Currently, the module only acts on fields of term reference type and Views
+Taxonomy Term filter handlers (updates handler to filter on the new term,
+instead of the one that has been merged). It would be desirable to update other
+possible places where deleted terms are used.
 
 Integration
 -------------
@@ -27,6 +29,10 @@ Currently module integrates with the following core and contributed modules:
  * Synonyms module (http://drupal.org/project/synonyms). During term merging
  you will be able to choose a trunk term's field into which all the branch terms
  will be added as synonyms (until cardinality limit for that field is reached).
+ * Hierarchical Select (http://drupal.org/project/hierarchical_select). If
+ Hierarchical Select module is configured to be used for working with Taxonomy,
+ its widget will be shown on the form, where you choose what terms to merge into
+ what term.
 
 Requirements
 -------------

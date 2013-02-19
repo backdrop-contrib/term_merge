@@ -316,6 +316,41 @@ function term_merge_action($object, $context) {
       $child->parent = $parents;
       taxonomy_term_save($child);
     }
+
+    // Views module integration. We update all Views taxonomy filter handlers
+    // configured to filter on term branch to filter on term trunk now, since
+    // the former becomes the latter.
+    if (module_exists('views')) {
+      $views = views_get_all_views();
+      foreach ($views as $view) {
+        // For better efficiency, we keep track of whether we have updated
+        // anything in a view, and thus whether we need to save it.
+        $needs_saving = FALSE;
+        // Even worse, we have to go through each display of each view.
+        foreach ($view->display as $display_id => $display) {
+          $view->set_display($display_id);
+          $filters = $view->display_handler->get_handlers('filter');
+          foreach ($filters as $filter_id => $filter_handler) {
+            // Currently we know how to update filters only of this particular
+            // class.
+            if (get_class($filter_handler) == 'views_handler_filter_term_node_tid') {
+              $filter = $view->get_item($display_id, 'filter', $filter_id);
+              if (isset($filter['value'][$term_branch->tid])) {
+                // Substituting term branch with term trunk.
+                unset($filter['value'][$term_branch->tid]);
+                $filter['value'][$term_trunk->tid] = $term_trunk->tid;
+                $view->set_item($display_id, 'filter', $filter_id, $filter);
+                $needs_saving = TRUE;
+              }
+            }
+          }
+        }
+        if ($needs_saving) {
+          $view->save();
+        }
+      }
+    }
+
     // We are instructed to delete the term branch after the merge,
     // and so we do.
     taxonomy_term_delete($term_branch->tid);

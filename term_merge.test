@@ -12,7 +12,7 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
 
   /**
    * Fully loaded Drupal user who has access to all required parts of the
-   *   website for testing.
+   * website for testing.
    *
    * @var stdClass
    */
@@ -306,7 +306,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->drupalPost(NULL, array(
       'field[cardinality]' => FIELD_CARDINALITY_UNLIMITED,
     ), 'Save settings');
-    // Flushing fields API the cache.
+    // Flushing fields API cache.
     _field_info_collate_fields(TRUE);
     // Creating a new node and settings its term reference field to point to
     // the term branch.
@@ -494,7 +494,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
       'field[settings][allowed_values][0][vocabulary]' => $this->vocabulary->machine_name,
     ), 'Save field settings');
     $this->drupalPost(NULL, array(), 'Save settings');
-    // Flushing fields API the cache.
+    // Flushing fields API cache.
     _field_info_collate_fields(TRUE);
 
     // Array of cases for which we test the Term Merge batch.
@@ -1165,18 +1165,18 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * Test disabled Synonyms module.
    */
-  /*public function testDisabled() {
+  public function testDisabled() {
     // Making sure synonyms settings are not available during merging when
     // merging with disabled Synonyms module.
     module_disable(array('synonyms'));
     $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertNoText(t('Add as Synonyms'), 'No synonyms settings are available when the Synonyms module is disabled.');
-  }*/
+  }
 
   /**
    * Test the action 'term_merge_action' in terms of integration with Synonyms.
    */
-  /*public function testTermMergeAction() {
+  public function testTermMergeAction() {
     $this->drupalLogin($this->admin);
     $terms = $this->createTerms(array('branch', 'trunk'));
 
@@ -1203,7 +1203,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
 
     $terms['trunk']->synonyms = array($terms['branch']->name);
     $this->assertSynonymsIntegration($terms, 'Synonyms are added, if action is instructed to add ones.');
-  }*/
+  }
 
   /**
    * Test Term Merge batch in terms of integration with Redirect/Path modules.
@@ -1312,5 +1312,133 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
     }
 
     return $return;
+  }
+}
+
+  /**
+   * Test the integration between Term Merge module and Synonyms module.
+   */
+class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
+
+  /**
+   * View object on which all tests happen.
+   *
+   * @var view
+   */
+  protected $view;
+
+  /**
+   * SetUp method.
+   */
+  public function setUp() {
+    parent::setUp(array('views'));
+    // Additionally we create a views with taxonomy term filter.
+    $view = views_new_view();
+    $view->name = 'term_merge_view_test';
+    $view->description = 'Test view to test Term Merge module.';
+    $view->tag = '';
+    $view->base_table = 'node';
+    $view->api_version = '3.0';
+    $view->core = 7;
+
+    $display_id = 'default';
+    $view->set_display($display_id);
+
+    views_save_view($view);
+    $this->view = &$view;
+  }
+
+  /**
+   * GetInfo method.
+   */
+  public function getInfo() {
+    return array(
+      'name' => 'Views module integration',
+      'description' => 'Ensure that the module Term Merge integrates with ' . l('Views', 'http://drupal.org/project/views') . ' module correctly.',
+      'group' => 'Term Merge',
+    );
+  }
+
+  /**
+   * Test integration with Views Taxonomy Term reference filter.
+   */
+    // We need to create a content type and attach a term reference field to
+  public function testTermReferenceFieldFilter() {
+    // that bundle in order to have some term reference filter available in
+    // Views.
+    $this->drupalPost('admin/structure/types/add', array(
+      'name' => $this->randomName(),
+      'type' => 'term_merge_node',
+    ), 'Save content type');
+    $field_name = 'term_reference';
+    $this->drupalPost('admin/structure/types/manage/term-merge-node/fields', array(
+      'fields[_add_new_field][label]' => 'Term Reference',
+      'fields[_add_new_field][field_name]' => $field_name,
+      'fields[_add_new_field][type]' => 'taxonomy_term_reference',
+      'fields[_add_new_field][widget_type]' => 'taxonomy_autocomplete',
+    ), 'Save');
+    $field_name = 'field_' . $field_name;
+    $this->drupalPost(NULL, array(
+      'field[settings][allowed_values][0][vocabulary]' => $this->vocabulary->machine_name,
+    ), 'Save field settings');
+    $this->drupalPost(NULL, array(
+      'field[cardinality]' => FIELD_CARDINALITY_UNLIMITED,
+    ), 'Save settings');
+    // Flushing fields API cache.
+    _field_info_collate_fields(TRUE);
+    // Loading field definition array of the term reference field we just
+    // created.
+    $field = field_info_field($field_name);
+
+    // Creating terms to have stuff to work with.
+    $terms = array(
+      'branch' => FALSE,
+      'trunk' => FALSE,
+    );
+
+    foreach ($terms as $term_type => $tmp) {
+      $url = 'admin/structure/taxonomy/vocabulary/add';
+      $name = $this->randomName();
+      $edit = array(
+        'name' => $name,
+      );
+
+      $this->drupalPost($url, $edit, 'Save');
+      $terms[$term_type] = $this->getLastTerm($this->vocabulary);
+    }
+
+    // Adding a taxonomy term reference filter to the view.
+    $this->view->set_display('default');
+
+    // We use Field API info to look up necessary tables and columns.
+    $table = reset(array_keys($field['storage']['details']['sql']['FIELD_LOAD_CURRENT']));
+    $columns = $field['storage']['details']['sql']['FIELD_LOAD_CURRENT'][$table];
+
+    $this->view->display_handler->display->display_options['filters'][$columns['tid']]['id'] = $columns['tid'];
+    $this->view->display_handler->display->display_options['filters'][$columns['tid']]['table'] = $table;
+    $this->view->display_handler->display->display_options['filters'][$columns['tid']]['field'] = $columns['tid'];
+    $this->view->display_handler->display->display_options['filters'][$columns['tid']]['value'] = array(
+      $terms['branch']->tid => $terms['branch']->tid,
+    );
+    $this->view->display_handler->display->display_options['filters'][$columns['tid']]['type'] = 'select';
+    $this->view->display_handler->display->display_options['filters'][$columns['tid']]['vocabulary'] = $this->vocabulary->machine_name;
+    $this->view->display_handler->display->display_options['filters'][$columns['tid']]['hierarchy'] = 1;
+
+    views_save_view($this->view);
+
+    // After such merge we expect the view's filter to be changed from branch
+    // term to trunk term.
+    actions_do('term_merge_action', $terms['branch'], array(
+      'term_trunk' => $terms['trunk']->tid,
+      'merge_fields' => FALSE,
+      'term_branch_keep' => FALSE,
+    ));
+
+    // Loading again the view after merging action.
+    $this->view = views_get_view($this->view->name);
+
+    $this->view->set_display('default');
+    $filter = $this->view->display_handler->display->display_options['filters'][$columns['tid']]['value'];
+    $this->assertTrue(in_array($terms['trunk']->tid, array_keys($filter)), 'Views term reference filter gets uptdated to filter on trunk term instead of filtering on branch term if the branch term is instructed to be deleted during merging of terms.');
   }
 }

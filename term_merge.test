@@ -303,7 +303,9 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->drupalPost(NULL, array(
       'field[settings][allowed_values][0][vocabulary]' => $this->vocabulary->machine_name,
     ), 'Save field settings');
-    $this->drupalPost(NULL, array(), 'Save settings');
+    $this->drupalPost(NULL, array(
+      'field[cardinality]' => FIELD_CARDINALITY_UNLIMITED,
+    ), 'Save settings');
     // Flushing fields API the cache.
     _field_info_collate_fields(TRUE);
     // Creating a new node and settings its term reference field to point to
@@ -321,6 +323,55 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     ));
     $this->drupalGet('node/' . $node->nid);
     $this->assertText($terms['trunk']->name, 'Taxonomy term reference field gets updated to point from term branch to term trunk after merging terms.');
+
+    // Testing 'Keep only unique' setting for merging. We create a node assigned
+    // to both branch and trunk terms, and merge with, and then without 'Keep
+    // only unique' setting, asserting each result.
+    $terms = array(
+      'trunk' => FALSE,
+      'branch' => FALSE,
+    );
+
+    foreach ($terms as $term_type => $tmp) {
+      $url = 'admin/structure/taxonomy/vocabulary/add';
+      $name = $this->randomName();
+      $edit = array(
+        'name' => $name,
+      );
+
+      $this->drupalPost($url, $edit, 'Save');
+      $terms[$term_type] = $this->getLastTerm($this->vocabulary);
+    }
+
+    $title = $this->randomName();
+    $this->drupalPost('node/add/term-merge-node', array(
+      'title' => $title,
+      'field_term_reference[' . LANGUAGE_NONE . ']' => $terms['branch']->name . ', ' . $terms['trunk']->name,
+    ), 'Save');
+    actions_do('term_merge_action', $terms['branch'], array(
+      'term_trunk' => $terms['trunk']->tid,
+      'merge_fields' => FALSE,
+      'term_branch_keep' => TRUE,
+      'keep_only_unique' => FALSE,
+    ));
+    $node = $this->drupalGetNodeByTitle($title);
+    $is_first_trunk = $node->field_term_reference[LANGUAGE_NONE][0]['tid'] == $terms['trunk']->tid;
+    $is_second_trunk = $node->field_term_reference[LANGUAGE_NONE][1]['tid'] == $terms['trunk']->tid;
+    $this->assertTrue($is_first_trunk && $is_second_trunk, 'The same terms are kep in term reference field values if "Keep only unique" is off.');
+
+    // We switch roles of 'trunk' and 'branch' now. We have a node with 2 terms,
+    // if we merge them into another with "Keep only unique" on we are supposed
+    // to have only 1 term after merging.
+    actions_do('term_merge_action', $terms['trunk'], array(
+      'term_trunk' => $terms['branch']->tid,
+      'merge_fields' => FALSE,
+      'term_branch_keep' => TRUE,
+      'keep_only_unique' => TRUE,
+    ));
+    $node = $this->drupalGetNodeByTitle($title, TRUE);
+    $is_single = count($node->field_term_reference[LANGUAGE_NONE]) == 1;
+    $is_expected_term = $node->field_term_reference[LANGUAGE_NONE][0]['tid'] == $terms['branch']->tid;
+    $this->assertTrue($is_single && $is_expected_term, 'Only one term is kept in term reference field values if "Keep only unique" is on.');
   }
 
   /**

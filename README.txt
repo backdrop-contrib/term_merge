@@ -33,6 +33,12 @@ Currently module integrates with the following core and contributed modules:
  Hierarchical Select module is configured to be used for working with Taxonomy,
  its widget will be shown on the form, where you choose what terms to merge into
  what term.
+ * Views (http://drupal.org/project/views). If the branch terms are to be
+ deleted after the merging process, you could end up having some Views filters
+ to filter on no longer existing terms. Term Merge module, while merging terms,
+ will update those filters to filter not on the branch term, but on the trunk
+ term. This way you will not have senseless filters and will not have to update
+ them manually.
 
 Requirements
 -------------

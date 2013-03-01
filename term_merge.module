@@ -174,12 +174,6 @@ function term_merge_action($object, $context) {
     return;
   }
 
-  // Calling a hook, this way we let whoever else to react and do his own
-  // extra logic when merging of terms occur. We prefer to call it before we
-  // handle our own logic, because our logic might delete $term_branch and
-  // maybe a module that implements this hook needs this term not deleted yet.
-  module_invoke_all('term_merge', $term_trunk, $term_branch, $context);
-
   // Defining some default values.
   if (!isset($context['term_branch_keep'])) {
     // It's easier to manually delete the unwanted terms, rather than
@@ -187,10 +181,9 @@ function term_merge_action($object, $context) {
     $context['term_branch_keep'] = TRUE;
   }
   if (!isset($context['merge_fields'])) {
-    // It's easier to delete extra values if you forgot to specify this
-    // parameter, rather than search for your DB back up. So by defualt we merge
-    // field values.
-    $context['merge_fields'] = TRUE;
+    // Initializing it with an empty array if client of this function forgot to
+    // provide info about what fields to merge.
+    $context['merge_fields'] = array();
   }
   if (!isset($context['keep_only_unique'])) {
     // Seems logical that mostly people will prefer to keep only one value in
@@ -206,31 +199,34 @@ function term_merge_action($object, $context) {
     $context['synonyms'] = array();
   }
 
-  if ($context['merge_fields']) {
-    // "Merging" the fields from $term_branch into $term_trunk where it's
-    // possible.
-    $bundle = field_extract_bundle('taxonomy_term', $vocabulary);
-    $instances = field_info_instances('taxonomy_term', $bundle);
+  // Calling a hook, this way we let whoever else to react and do his own
+  // extra logic when merging of terms occurs. We prefer to call it before we
+  // handle our own logic, because our logic might delete $term_branch and
+  // maybe a module that implements this hook needs this term not deleted yet.
+  module_invoke_all('term_merge', $term_trunk, $term_branch, $context);
 
-    foreach ($instances as $instance) {
+  if (!empty($context['merge_fields'])) {
+    // "Merging" the fields from $term_branch into $term_trunk where it is
+    // possible.
+    foreach ($context['merge_fields'] as $field_name) {
       // Getting the list of available languages for this field.
       $languages = array();
-      if (is_array($term_trunk->$instance['field_name'])) {
-        $languages = array_merge($languages, array_keys($term_trunk->$instance['field_name']));
+      if (is_array($term_trunk->$field_name)) {
+        $languages = array_merge($languages, array_keys($term_trunk->$field_name));
       }
-      if (is_array($term_branch->$instance['field_name'])) {
-        $languages = array_merge($languages, array_keys($term_branch->$instance['field_name']));
+      if (is_array($term_branch->$field_name)) {
+        $languages = array_merge($languages, array_keys($term_branch->$field_name));
       }
       $languages = array_unique($languages);
       // Merging the data of both terms into $term_trunk.
       foreach ($languages as $language) {
-        if (!isset($term_trunk->{$instance['field_name']}[$language])) {
-          $term_trunk->{$instance['field_name']}[$language] = array();
+        if (!isset($term_trunk->{$field_name}[$language])) {
+          $term_trunk->{$field_name}[$language] = array();
         }
-        if (!isset($term_branch->{$instance['field_name']}[$language])) {
-          $term_branch->{$instance['field_name']}[$language] = array();
+        if (!isset($term_branch->{$field_name}[$language])) {
+          $term_branch->{$field_name}[$language] = array();
         }
-        $term_trunk->{$instance['field_name']}[$language] = array_merge($term_trunk->{$instance['field_name']}[$language], $term_branch->{$instance['field_name']}[$language]);
+        $term_trunk->{$field_name}[$language] = array_merge($term_trunk->{$field_name}[$language], $term_branch->{$field_name}[$language]);
       }
     }
 
@@ -939,9 +935,9 @@ function term_merge_form_term_trunk_term_create($form, $form_state) {
  *   supported settings are:
  *     term_branch_keep - (bool) Whether the term branches should not be
  *       deleted, also known as "merge only occurrences" option
- *     merge_fields - (bool) Whether the fields from branch terms should be
- *       merged into the fields of term trunk (until each field's cardinality
- *       limit is reached)
+ *     merge_fields - (array) Array of field names whose values should be merged
+ *       into the values of corresponding fields of term trunk (until each
+ *       field's cardinality limit is reached)
  *     keep_only_unique - (bool) Whether after merging within one field only
  *       unique taxonomy term references should be kept in other entities. If
  *       before merging your entity had 2 values in its taxonomy term reference
@@ -1010,9 +1006,9 @@ function term_merge($term_branch, $term_trunk, $merge_settings = array()) {
  *   supported settings are:
  *     term_branch_keep - (bool) Whether the term branches should not be
  *       deleted, also known as "merge only occurrences" option
- *     merge_fields - (bool) Whether the fields from branch terms should be
- *       merged into the fields of term trunk (until each field's cardinality
- *       limit is reached)
+ *     merge_fields - (array) Array of field names whose values should be merged
+ *       into the values of corresponding fields of term trunk (until each
+ *       field's cardinality limit is reached)
  *     keep_only_unique - (bool) Whether after merging within one field only
  *       unique taxonomy term references should be kept in other entities. If
  *       before merging your entity had 2 values in its taxonomy term reference
@@ -1335,16 +1331,26 @@ function term_merge_merge_options_elements($vocabulary) {
   // for each setting.
   $form = array();
 
+  // Getting bundle name and a list of fields attached to this bundle for
+  // further use down below in the code while generating form elements.
+  $bundle = field_extract_bundle('taxonomy_term', $vocabulary);
+  $instances = field_info_instances('taxonomy_term', $bundle);
+
   $form['term_branch_keep'] = array(
     '#type' => 'checkbox',
     '#title' => t('Only merge occurrences'),
     '#description' => t('Check this if you want to only merge the occurrences of the specified terms, i.e. the terms will not be deleted from your vocabulary.'),
   );
 
+  $options = array();
+  foreach ($instances as $instance) {
+    $options[$instance['field_name']] = $instance['label'];
+  }
   $form['merge_fields'] = array(
-    '#type' => 'checkbox',
+    '#type' => 'checkboxes',
     '#title' => t('Merge Term Fields'),
-    '#description' => t('Whether to the values of term trunk should be added the values of corresponding fields of term branch. The values will be added until the cardinality limit for each field is reached.'),
+    '#description' => t('Check the fields whose values from brach terms you want to add to values of the corresponding fields of the trunk term. <b>Important note:</b> the values will be added until the cardinality limit for the selected fields is reached.'),
+    '#options' => $options,
   );
 
   $form['keep_only_unique'] = array(
@@ -1376,11 +1382,9 @@ function term_merge_merge_options_elements($vocabulary) {
   }
 
   if (module_exists('synonyms')) {
-    $bundle = field_extract_bundle('taxonomy_term', $vocabulary);
     $options = array();
-    foreach (synonyms_synonyms_fields($vocabulary) as $field) {
-      $instance = field_info_instance('taxonomy_term', $field, $bundle);
-      $options[$field] = $instance['label'];
+    foreach (synonyms_synonyms_fields($vocabulary) as $field_name) {
+      $options[$field_name] = $instances[$field_name]['label'];
     }
     $form['synonyms'] = array(
       '#type' => 'checkboxes',
@@ -1432,12 +1436,11 @@ function term_merge_merge_options_elements($vocabulary) {
 function term_merge_merge_options_submit($merge_settings_element, &$form_state, $form) {
   $merge_settings = array(
     'term_branch_keep' => (bool) $merge_settings_element['term_branch_keep']['#value'],
-    'merge_fields' => (bool) $merge_settings_element['merge_fields']['#value'],
+    'merge_fields' => array_values(array_filter($merge_settings_element['merge_fields']['#value'])),
     'keep_only_unique' => (bool) $merge_settings_element['keep_only_unique']['#value'],
     'redirect' => isset($merge_settings_element['redirect']['#value']) ? $merge_settings_element['redirect']['#value'] : TERM_MERGE_NO_REDIRECT,
     'synonyms' => isset($merge_settings_element['synonyms']['#value']) ? array_values(array_filter($merge_settings_element['synonyms']['#value'])) : array(),
     'step' => (int) $merge_settings_element['step']['#value'],
   );
-
   return $merge_settings;
 }

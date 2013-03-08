@@ -419,10 +419,10 @@ function term_merge_action($object, $context) {
 }
 
 /**
- *  Menu callback.
+ * Menu callback.
  *
- *  Allow user to specify which terms to be merged into which term and any
- *  other settings needed for the term merge action.
+ * Allow user to specify which terms to be merged into which term and any
+ * other settings needed for the term merge action.
  *
  * @param object $vocabulary
  *   Fully loaded taxonomy vocabulary object
@@ -1122,7 +1122,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
   // Helpful and self explaining text that should help people understand what's
   // up.
   $form['help'] = array(
-    '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children. Each group consists of a table of found duplicates. Tick on the terms you would like to merge and choose the term into which you want to merge the ticked on terms.') . '</p>'
+    '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children. Each group consists of a table of found duplicates. Tick on the terms you would like to merge and choose the term into which you want to merge the ticked on terms.') . '</p>',
   );
 
   // Array of groups of terms with the same name. Each group is an array of
@@ -1214,7 +1214,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
     $form['nothing_found'] = array(
       '#markup' => '<p><b>' . t('Sorry, seems like we were not able to find any possible duplicate terms in %vocabulary vocabulary.', array(
         '%vocabulary' => $vocabulary->name,
-      )) . '</b></p>'
+      )) . '</b></p>',
     );
   }
 

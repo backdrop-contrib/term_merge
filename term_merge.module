@@ -6,13 +6,21 @@
  */
 
 /**
+ * Constant to use in term merge action.
+ *
  * Constant denotes "do not create HTTP redirect" logic for term merge action.
+ *
+ * @var int
  */
 define('TERM_MERGE_NO_REDIRECT', -1);
 
 /**
+ * Constant to use in term merge action.
+ *
  * Constant denotes "Create a new term and use it as the term trunk" logic
  * for term merge action.
+ *
+ * @var int
  */
 define('TERM_MERGE_NEW_TERM_TRUNK', -1);
 
@@ -155,14 +163,16 @@ function term_merge_action($object, $context) {
   $term_trunk = taxonomy_term_load($context['term_trunk']);
   $vocabulary = taxonomy_vocabulary_load($term_branch->vid);
 
-  $_term_branch_children = taxonomy_get_tree($term_branch->vid, $term_branch->tid);
   $term_branch_children = array();
-  foreach ($_term_branch_children as $term) {
+  foreach (taxonomy_get_tree($term_branch->vid, $term_branch->tid) as $term) {
     $term_branch_children[] = $term->tid;
   }
 
   if ($term_branch->vid != $term_trunk->vid) {
-    watchdog('term_merge', 'Trying to merge 2 terms (%term_branch, %term_trunk) from different vocabularies', array('%term_branch' => $term_branch->name, '%term_trunk' => $term_trunk->name), WATCHDOG_WARNING);
+    watchdog('term_merge', 'Trying to merge 2 terms (%term_branch, %term_trunk) from different vocabularies', array(
+      '%term_branch' => $term_branch->name,
+      '%term_trunk' => $term_trunk->name,
+    ), WATCHDOG_WARNING);
     return;
   }
   if ($term_branch->tid == $term_trunk->tid) {
@@ -170,7 +180,10 @@ function term_merge_action($object, $context) {
     return;
   }
   if (in_array($term_trunk->tid, $term_branch_children)) {
-    watchdog('term_merge', 'Trying to merge a term %term_branch into its child %term_trunk.', array('%term_branch' => $term_branch->name, '%term_trunk' => $term_trunk->name), WATCHDOG_WARNING);
+    watchdog('term_merge', 'Trying to merge a term %term_branch into its child %term_trunk.', array(
+      '%term_branch' => $term_branch->name,
+      '%term_trunk' => $term_trunk->name,
+    ), WATCHDOG_WARNING);
     return;
   }
 
@@ -187,11 +200,11 @@ function term_merge_action($object, $context) {
   }
   if (!isset($context['keep_only_unique'])) {
     // Seems logical that mostly people will prefer to keep only one value in
-    // term reference field per one taxonomy term.
+    // term reference field per taxonomy term.
     $context['keep_only_unique'] = TRUE;
   }
   if (!isset($context['redirect']) || !module_exists('redirect')) {
-    // This behavior requires Redirect module installed.
+    // This behavior requires Redirect module installed and enabled.
     $context['redirect'] = TERM_MERGE_NO_REDIRECT;
   }
   if (!isset($context['synonyms']) || !module_exists('synonyms')) {
@@ -199,10 +212,10 @@ function term_merge_action($object, $context) {
     $context['synonyms'] = array();
   }
 
-  // Calling a hook, this way we let whoever else to react and do his own
-  // extra logic when merging of terms occurs. We prefer to call it before we
-  // handle our own logic, because our logic might delete $term_branch and
-  // maybe a module that implements this hook needs this term not deleted yet.
+  // Calling a hook, this way we let whoever else to react and do his own extra
+  // logic when merging of terms occurs. We prefer to call it before we handle
+  // our own logic, because our logic might delete $term_branch and maybe a
+  // module that implements this hook needs this term not deleted yet.
   module_invoke_all('term_merge', $term_trunk, $term_branch, $context);
 
   if (!empty($context['merge_fields'])) {
@@ -211,10 +224,10 @@ function term_merge_action($object, $context) {
     foreach ($context['merge_fields'] as $field_name) {
       // Getting the list of available languages for this field.
       $languages = array();
-      if (is_array($term_trunk->$field_name)) {
+      if (isset($term_trunk->$field_name) && is_array($term_trunk->$field_name)) {
         $languages = array_merge($languages, array_keys($term_trunk->$field_name));
       }
-      if (is_array($term_branch->$field_name)) {
+      if (isset($term_branch->$field_name) && is_array($term_branch->$field_name)) {
         $languages = array_merge($languages, array_keys($term_branch->$field_name));
       }
       $languages = array_unique($languages);
@@ -237,7 +250,7 @@ function term_merge_action($object, $context) {
 
   // Updating all the links to $term_branch to point now to $term_trunk
   // firstly we go through the list of all fields searching for
-  // taxonomy_term_reference type because potentially some of these fields
+  // taxonomy_term_reference field type because potentially some of these fields
   // values will have to be updated after merging terms.
   $fields = field_info_fields();
   $result = array();
@@ -280,7 +293,7 @@ function term_merge_action($object, $context) {
               unset($entity->{$field_name}[$language][$delta]);
             }
             else {
-              // Merging term references, if necessary, and keep an eye on
+              // Merging term references if necessary, and keep an eye on
               // whether we already have term trunk among this field values.
               switch ($item['tid']) {
                 case $term_trunk->tid:
@@ -296,7 +309,7 @@ function term_merge_action($object, $context) {
           }
           // Above in the code, while looping through all deltas of this field,
           // we might have unset some of the deltas to keep term references
-          // unique. We should better keep deltas as serie of consecutive
+          // unique. We should better keep deltas as a serie of consecutive
           // numbers, because it is what it is supposed to be.
           $entity->{$field_name}[$language] = array_values($entity->{$field_name}[$language]);
         }
@@ -409,17 +422,17 @@ function term_merge_action($object, $context) {
  *  Menu callback.
  *
  *  Allow user to specify which terms to be merged into which term and any
- *    other settings needed for term merge action.
+ *  other settings needed for the term merge action.
  *
  * @param object $vocabulary
  *   Fully loaded taxonomy vocabulary object
  * @param object $term
  *   Fully loaded taxonomy term object that should be selected as the default
- *     merge term in the form. If the $vocabulary is omitted, the vocabulary of
- *     $term is considered
+ *   merge term in the form. If the $vocabulary is omitted, the vocabulary of
+ *   $term is considered
  *
  * @return array
- *   Array of the form
+ *   Array of the form in Form API format
  */
 function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
   if (is_null($vocabulary)) {
@@ -736,8 +749,8 @@ function term_merge_form_term_trunk_widget_select(&$form, &$form_state, $vocabul
     // We do a trick here, since we know the 1st element is the <root> option
     // and all others are normal taxonomy terms, we keep the 1st element as it
     // is while all the other elements we substitute with our $options array
-    // which is basically identical but already has filtered out unwanted terms.
-    // Plus we have to unset the 'New Term' option from $options.
+    // which is basically identical but already has been filtered out unwanted
+    // terms. Plus we have to unset the 'New Term' option from $options.
     unset($options[TERM_MERGE_NEW_TERM_TRUNK]);
     if (is_array($form['term_trunk']['term_create']['relations']['parent']['#options'])) {
       $form['term_trunk']['term_create']['relations']['parent']['#options'] = array_slice($form['term_trunk']['term_create']['relations']['parent']['#options'], 0, 1, TRUE) + $options;
@@ -824,7 +837,7 @@ function term_merge_form_term_trunk_widget_hs_taxonomy(&$form, &$form_state, $vo
  * Validate form element of the autocomplete widget of term trunk element of
  * the form term_merge_form(). Make sure the enetered string is a name of one of
  * the existing terms in the vocabulary where the merge occurs. If term is found
- * the function substitutes the name with its {taxonomy_term_data}.tid as it
+ * the function substitutes the name with its {taxonomy_term_data}.tid as it is
  * what is expected from a term trunk widget to provide in its value.
  */
 function term_merge_form_trunk_term_widget_autocomplete_validate($element, &$form_state, $form) {
@@ -839,7 +852,7 @@ function term_merge_form_trunk_term_widget_autocomplete_validate($element, &$for
   }
   else {
     // We have to substitute the term's name with its tid in order to make this
-    // widget unified with the interface.
+    // widget consistent with the interface.
     $term = array_pop($term);
     form_set_value($element, $term->tid, $form_state);
   }
@@ -864,12 +877,12 @@ function term_merge_form_trunk_term_widget_hs_taxonomy_validate($element, &$form
  * Menu page callback function.
  *
  * Autocomplete callback function for the trunk term form element in the widget
- *   of autocomplete. The code of this function was mainly copy-pasted from
- *   Taxonomy autocomplete widget menu callback function.
+ * of autocomplete. The code of this function was mainly copy-pasted from
+ * Taxonomy autocomplete widget menu callback function.
  *
  * @param object $vocabulary
  *   Fully loaded vocabulary object inside of which the terms are about to be
- *     merged
+ *   merged
  */
 function term_merge_form_term_trunk_widget_autocomplete_autocomplete($vocabulary) {
   // If the request has a '/' in the search text, then the menu system will have
@@ -907,7 +920,7 @@ function term_merge_form_term_trunk_widget_autocomplete_autocomplete($vocabulary
  * Ajax callback function.
  *
  * Used in term_merge_term_merge_form() to replace the term_trunk element
- *   depending on already selected term_branch values.
+ * depending on already selected term_branch values.
  */
 function term_merge_form_term_trunk($form, $form_state) {
   return $form['term_trunk'];
@@ -917,7 +930,7 @@ function term_merge_form_term_trunk($form, $form_state) {
  * Ajax callback function.
  *
  * Used in term_merge_term_merge_form() to replace the term create fieldset
- *   depending on already selected term_branch values and the term_trunk value.
+ * depending on already selected term_branch values and the term_trunk value.
  */
 function term_merge_form_term_trunk_term_create($form, $form_state) {
   return $form['term_trunk']['term_create'];
@@ -933,12 +946,12 @@ function term_merge_form_term_trunk_term_create($form, $form_state) {
  * @param array $merge_settings
  *   Array of settings that control how merging should happen. Currently
  *   supported settings are:
- *     term_branch_keep - (bool) Whether the term branches should not be
+ *     - term_branch_keep: (bool) Whether the term branches should not be
  *       deleted, also known as "merge only occurrences" option
- *     merge_fields - (array) Array of field names whose values should be merged
- *       into the values of corresponding fields of term trunk (until each
- *       field's cardinality limit is reached)
- *     keep_only_unique - (bool) Whether after merging within one field only
+ *     - merge_fields: (array) Array of field names whose values should be
+ *       merged into the values of corresponding fields of term trunk (until
+ *       each field's cardinality limit is reached)
+ *     - keep_only_unique: (bool) Whether after merging within one field only
  *       unique taxonomy term references should be kept in other entities. If
  *       before merging your entity had 2 values in its taxonomy term reference
  *       field and one was pointing to term branch while another was pointing to
@@ -946,23 +959,23 @@ function term_merge_form_term_trunk_term_create($form, $form_state) {
  *       referencing to the same term trunk twice. If you pass TRUE in this
  *       parameter, only a single reference will be stored in your entity after
  *       merging
- *     redirect - (int) HTTP code for redirect from $term_branch to $term_trunk,
- *       0 stands for the default redirect defined in Redirect module. Use
- *       constant TERM_MERGE_NO_REDIRECT to denote not creating any HTTP
- *       redirect. Note: this parameter requires Redirect module enabled,
+ *     - redirect: (int) HTTP code for redirect from $term_branch to
+ *       $term_trunk, 0 stands for the default redirect defined in Redirect
+ *       module. Use constant TERM_MERGE_NO_REDIRECT to denote not creating any
+ *       HTTP redirect. Note: this parameter requires Redirect module enabled,
  *       otherwise it will be disregarded
- *     synonyms - (array) Array of field names of trunk term into which branch
+ *     - synonyms: (array) Array of field names of trunk term into which branch
  *       terms should be added as synonyms (until each field's cardinality limit
  *       is reached). Note: this parameter requires Synonyms module enabled,
  *       otherwise it will be disregarded
- *     step - (int) How many term branches to merge per script run in batch. If
+ *     - step: (int) How many term branches to merge per script run in batch. If
  *       you are hitting time or memory limits, decrease this parameter
  */
 function term_merge($term_branch, $term_trunk, $merge_settings = array()) {
   // Older versions of this module had another interface of this function,
-  // as backword capability we still support the older interface, which was
-  // instead of supplying a $merge_settings array supplying all the settings
-  // as additional function arguments.
+  // as backword capability we still support the older interface, instead of
+  // supplying a $merge_settings array, it was supplying all the settings as
+  // additional function arguments.
   // @todo: delete this backword capability at some point.
   if (!is_array($merge_settings)) {
     $merge_settings = array(
@@ -995,7 +1008,7 @@ function term_merge($term_branch, $term_trunk, $merge_settings = array()) {
 /**
  * Process batch function.
  *
- * Triggers action 'term_merge_action' on each pair of term branch:term trunk.
+ * Trigger action 'term_merge_action' on each pair of term branch:term trunk.
  *
  * @param array $term_branch
  *   An array of term tids to be merged, aka term branches
@@ -1004,12 +1017,12 @@ function term_merge($term_branch, $term_trunk, $merge_settings = array()) {
  * @param array $merge_settings
  *   Array of settings that control how merging should happen. Currently
  *   supported settings are:
- *     term_branch_keep - (bool) Whether the term branches should not be
+ *     - term_branch_keep: (bool) Whether the term branches should not be
  *       deleted, also known as "merge only occurrences" option
- *     merge_fields - (array) Array of field names whose values should be merged
- *       into the values of corresponding fields of term trunk (until each
- *       field's cardinality limit is reached)
- *     keep_only_unique - (bool) Whether after merging within one field only
+ *     - merge_fields: (array) Array of field names whose values should be
+ *       merged into the values of corresponding fields of term trunk (until
+ *       each field's cardinality limit is reached)
+ *     - keep_only_unique: (bool) Whether after merging within one field only
  *       unique taxonomy term references should be kept in other entities. If
  *       before merging your entity had 2 values in its taxonomy term reference
  *       field and one was pointing to term branch while another was pointing to
@@ -1017,16 +1030,16 @@ function term_merge($term_branch, $term_trunk, $merge_settings = array()) {
  *       referencing to the same term trunk twice. If you pass TRUE in this
  *       parameter, only a single reference will be stored in your entity after
  *       merging
- *     redirect - (int) HTTP code for redirect from $term_branch to $term_trunk,
- *       0 stands for the default redirect defined in Redirect module. Use
- *       constant TERM_MERGE_NO_REDIRECT to denote not creating any HTTP
- *       redirect. Note: this parameter requires Redirect module enabled,
+ *     - redirect: (int) HTTP code for redirect from $term_branch to
+ *       $term_trunk, 0 stands for the default redirect defined in Redirect
+ *       module. Use constant TERM_MERGE_NO_REDIRECT to denote not creating any
+ *       HTTP redirect. Note: this parameter requires Redirect module enabled,
  *       otherwise it will be disregarded
- *     synonyms - (array) Array of field names of trunk term into which branch
+ *     - synonyms: (array) Array of field names of trunk term into which branch
  *       terms should be added as synonyms (until each field's cardinality limit
  *       is reached). Note: this parameter requires Synonyms module enabled,
  *       otherwise it will be disregarded
- *     step - (int) How many term branches to merge per script run in batch. If
+ *     - step: (int) How many term branches to merge per script run in batch. If
  *       you are hitting time or memory limits, decrease this parameter
  * @param array $context
  *   Drupal Batch API context array
@@ -1040,7 +1053,7 @@ function _term_merge_batch_process($term_branch, $term_trunk, $merge_settings, &
   // Populating $merge_settings with defaults.
   $merge_settings += array(
     'term_branch_keep' => FALSE,
-    'merge_fields' => FALSE,
+    'merge_fields' => array(),
     'keep_only_unique' => TRUE,
     'redirect' => TERM_MERGE_NO_REDIRECT,
     'synonyms' => array(),
@@ -1052,7 +1065,7 @@ function _term_merge_batch_process($term_branch, $term_trunk, $merge_settings, &
   // instead of just repeating calls to taxonomy_term_load().
   $till = min($total, $context['sandbox']['current'] + $merge_settings['step']);
   $length = $till - $context['sandbox']['current'];
-  array_slice($term_branch, $context['sandbox']['current'], $length);
+  $term_branch = array_slice($term_branch, $context['sandbox']['current'], $length);
   $term_branch = array_values(taxonomy_term_load_multiple($term_branch));
   for ($i = 0; $i < $merge_settings['step'] && $context['sandbox']['current'] < $total; $i++) {
     actions_do('term_merge_action', $term_branch[$i], array(
@@ -1076,7 +1089,7 @@ function _term_merge_batch_process($term_branch, $term_trunk, $merge_settings, &
 /**
  * Batch 'finished' callback.
  *
- * Processes results of Term Merge batch.
+ * Process results of Term Merge batch.
  */
 function term_merge_batch_finished($success, $results, $operations) {
   if ($success) {
@@ -1091,7 +1104,7 @@ function term_merge_batch_finished($success, $results, $operations) {
 /**
  * Generate 'term_merge_duplicates_form'.
  *
- * Allow merging terms with the same name.
+ * Allow merging terms with the same or similar names.
  *
  * @param object $vocabulary
  *   Fully loaded taxonomy vocabulary object inside of which term merging occurs
@@ -1109,7 +1122,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
   // Helpful and self explaining text that should help people understand what's
   // up.
   $form['help'] = array(
-    '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children. Each group consists of table of found duplicates. Tick on the terms you would like to merge and choose the term into which you want to merge the ticked on terms.') . '</p>'
+    '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children. Each group consists of a table of found duplicates. Tick on the terms you would like to merge and choose the term into which you want to merge the ticked on terms.') . '</p>'
   );
 
   // Array of groups of terms with the same name. Each group is an array of
@@ -1128,6 +1141,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
   );
   // Whether there is at least one group of possible duplicate terms found.
   $is_any = FALSE;
+
   foreach ($groups as $i => $group) {
     if (count($group) > 1) {
       $is_any = TRUE;
@@ -1203,7 +1217,6 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
       )) . '</b></p>'
     );
   }
-
 
   return $form;
 }
@@ -1281,7 +1294,7 @@ function term_merge_duplicates_process_name($name) {
 function term_merge_duplicates_fieldset_preprocess($element) {
   $options = &$element['duplicates']['#options'];
   foreach ($options as $tid => $row) {
-    $element['trunk'][$tid]['#title_display'] = 'invisible';
+    $element['trunk_tid'][$tid]['#title_display'] = 'invisible';
     $options[$tid] = array(
       'trunk' => drupal_render($element['trunk_tid'][$tid]),
     ) + $options[$tid];
@@ -1299,7 +1312,7 @@ function term_merge_duplicates_fieldset_preprocess($element) {
  *
  * Validate fieldset of a 'term_merge_duplicates_form' form, if any duplicate
  * has been selected for merging, it makes sure the trunk term has been
- * selected. We can't allow merging without knownig the explicit trunk term.
+ * selected. We can't allow merging without knowing the explicit trunk term.
  */
 function term_merge_duplicates_fieldset_validate($element, &$form_state, $form) {
   if (!empty($element['duplicates']['#value']) && !is_numeric($element['trunk_tid']['#value'])) {
@@ -1349,7 +1362,7 @@ function term_merge_merge_options_elements($vocabulary) {
   $form['merge_fields'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Merge Term Fields'),
-    '#description' => t('Check the fields whose values from brach terms you want to add to values of the corresponding fields of the trunk term. <b>Important note:</b> the values will be added until the cardinality limit for the selected fields is reached.'),
+    '#description' => t('Check the fields whose values from brach terms you want to add to the values of corresponding fields of the trunk term. <b>Important note:</b> the values will be added until the cardinality limit for the selected fields is reached.'),
     '#options' => $options,
   );
 
@@ -1410,6 +1423,7 @@ function term_merge_merge_options_elements($vocabulary) {
 
   return $form;
 }
+
 /**
  * Return merge settings array.
  *

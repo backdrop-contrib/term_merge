@@ -16,9 +16,8 @@ This module allows you to merge multiple terms into one, while updating
 all fields referring to those terms to refer to the replacement term instead.
 
 Currently, the module only acts on fields of term reference type and Views
-Taxonomy Term filter handlers (updates handler to filter on the new term,
-instead of the one that has been merged). It would be desirable to update other
-possible places where deleted terms are used.
+Taxonomy Term filter handlers. It would be desirable to update other possible
+places where deleted terms are used.
 
 Integration
 -------------

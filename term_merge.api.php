@@ -6,7 +6,7 @@
  */
 
 /**
- * Notify other modules when merging of 2 taxonomy terms occur.
+ * Notify other modules when merging of 2 taxonomy terms occurs.
  *
  * @param object $term_trunk
  *   Fully loaded taxonomy term object of the term trunk, term into which
@@ -16,8 +16,7 @@
  *   merged, aka 'source'
  * @param array $context
  *   Array $context as it is passed to term_merge_action() - you can get a
- *   little more info about context of merging from this array
- *
+ *   little more info about context about merging from this array
  */
 function hook_term_merge($term_trunk, $term_branch, $context) {
   // Here we might want to run a query like:

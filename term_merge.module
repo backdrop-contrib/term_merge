@@ -34,7 +34,8 @@ function term_merge_menu() {
     'title' => 'Merge terms',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('term_merge_form', 3),
-    'access arguments' => array('merge terms'),
+    'access callback' => 'term_merge_access',
+    'access arguments' => array(3),
     'type' => MENU_LOCAL_TASK,
   );
 
@@ -47,7 +48,8 @@ function term_merge_menu() {
     'title' => 'Merge Duplicate Terms',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('term_merge_duplicates_form', 3),
-    'access arguments' => array('merge terms'),
+    'access callback' => 'term_merge_access',
+    'access arguments' => array(3),
     'type' => MENU_LOCAL_TASK,
   );
 
@@ -55,7 +57,8 @@ function term_merge_menu() {
     'title' => 'Merge Terms',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('term_merge_form', NULL, 2),
-    'access arguments' => array('merge terms'),
+    'access callback' => 'term_merge_access',
+    'access arguments' => array(NULL, 2),
     'type' => MENU_LOCAL_TASK,
     'weight' => 10,
   );
@@ -69,7 +72,8 @@ function term_merge_menu() {
     'title' => 'Merge Duplicate Terms',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('term_merge_duplicates_form', 2),
-    'access arguments' => array('merge terms'),
+    'access callback' => 'term_merge_access',
+    'access arguments' => array(NULL, 2),
     'type' => MENU_LOCAL_TASK,
   );
 
@@ -77,7 +81,8 @@ function term_merge_menu() {
     'title' => 'Autocomplete Term Merge form term trunk',
     'page callback' => 'term_merge_form_term_trunk_widget_autocomplete_autocomplete',
     'page arguments' => array(3),
-    'access arguments' => array('merge terms'),
+    'access callback' => 'term_merge_access',
+    'access arguments' => array(3),
     'type' => MENU_CALLBACK,
   );
 
@@ -98,12 +103,19 @@ function term_merge_admin_paths() {
  * Implements hook_permission().
  */
 function term_merge_permission() {
-  return array(
-    'merge terms' => array(
-      'title' => t('Merge terms'),
-      'description' => t('Gives the ability to merge taxonomy terms.'),
-    ),
+  $permissions = array();
+  $permissions['merge terms'] = array(
+    'title' => t('Merge any terms'),
+    'description' => t('Gives the ability to merge any taxonomy terms.'),
   );
+  $vocabularies = taxonomy_get_vocabularies();
+  foreach ($vocabularies as $vocabulary) {
+    $permissions['merge ' . $vocabulary->machine_name . ' terms'] = array(
+      'title' => t('Merge %name vocabulary terms', array('%name' => $vocabulary->name)),
+      'description' => t('Gives the ability to merge taxonomy terms that belong to vocabulary %name.', array('%name' => $vocabulary->name)),
+    );
+  }
+  return $permissions;
 }
 
 /**
@@ -130,6 +142,47 @@ function term_merge_help($path, $arg) {
       return '<p>' . t('Allows you to merge multiple terms into one and and at the same time update all fields referencing to the old ones.') . '</p>';
       break;
   }
+}
+
+/**
+ * Access callback for term merge action.
+ *
+ * Decide whether to grant access to an account for an operation of merging
+ * terms in a vocabulary.
+ *
+ * @param object $vocabulary
+ *   Fully loaded vocabulary object inside of which term merge operation is
+ *   requested for access granting
+ * @param object $term
+ *   Fully loaded term object which belongs to the vocabulary inside of which
+ *   term merge operation is requested for access granting. You are supposed
+ *   only to provide either $vocabulary or $term. Depending on your context it
+ *   might be more convenient for you to provide $term, and on other occasions
+ *   it might be $vocabulary of more convenience
+ * @param object $account
+ *   Fully loaded user object who is requesting access granting for the
+ *   operation of term merging. You may provide nothing here, and the currently
+ *   logged in user will be considered
+ *
+ * @return bool
+ *   Whether the access for term merging operation has been granted
+ */
+function term_merge_access($vocabulary = NULL, $term = NULL, $account = NULL) {
+  if (is_null($vocabulary) && is_null($term)) {
+    // This is no go, at least one of these 2 has to be provided.
+    return FALSE;
+  }
+
+  if (is_null($account)) {
+    // Falling back on currently logged in user.
+    $account = $GLOBALS['user'];
+  }
+
+  if (is_null($vocabulary)) {
+    $vocabulary = taxonomy_vocabulary_load($term->vid);
+  }
+
+  return user_access('merge terms', $account) || user_access('merge ' . $vocabulary->machine_name . ' terms', $account);
 }
 
 /**

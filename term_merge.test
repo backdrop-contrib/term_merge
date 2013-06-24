@@ -385,7 +385,8 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * Test all cases for potentially "buggy" input.
    *
-   * Test the functionality of the action "Term Merge".
+   * Test the functionality of the action "Term Merge" with various suspicious
+   * input arguments, and testing the web UI of the module with suspicios input.
    */
   public function testTermMergeResistance() {
     drupal_static_reset();
@@ -465,6 +466,14 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
       'term_branch_keep' => FALSE,
     ));
     $this->termMergeResistanceAssert($terms, 'Testing merging a term into itself.');
+
+    // Making sure the access rights are respected.
+    $account = $this->drupalCreateUser(array('merge vocabulary2 terms'));
+    $this->drupalLogin($account);
+    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
+    $this->assertResponse(403, 'Per vocabulary term merge permissions are repsected in the module - an account cannot merge terms in the vocabulary in which he is not supposed to be able to merge.');
+    $this->drupalGet('admin/structure/taxonomy/vocabulary2/merge');
+    $this->assertResponse(200, 'Per vocabulary term merge permissions are repsected in the module - an account can merge terms in the vocabulary in which he is supposed to be able to merge.');
   }
 
   /**

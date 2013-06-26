@@ -460,7 +460,11 @@ function term_merge_action($object, $context) {
       'redirect' => drupal_get_path_alias('taxonomy/term/' . $term_trunk->tid),
       'status_code' => $context['redirect'],
     ));
-    redirect_save($redirect);
+    // avoid duplicate entry errors
+    redirect_hash($redirect);
+    if (!redirect_load_by_hash($redirect->hash)) {
+      redirect_save($redirect);
+    }
   }
 
   watchdog('term_merge', 'Successfully merged term %term_branch into term %term_trunk in vocabulary %vocabulary. Context: @context', array(

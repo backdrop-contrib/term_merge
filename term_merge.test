@@ -883,7 +883,7 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
     // Deciding what terms to merge.
     $edit = array();
     foreach ($groups as $name => $terms) {
-      $edit_key = term_merge_duplicates_process_name($name);
+      $edit_key = $this->duplicateProcessName($name);
       // Firstly we pick the trunk term, to make it easier, let it be the 1st
       // term of available collection.
       $edit['group[' . $edit_key . '][trunk_tid]'] = $terms[0]->tid;
@@ -957,6 +957,33 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
       }
     }
     return $groups;
+  }
+
+  /**
+   * Supportive method.
+   *
+   * Manipulate supplied var $name and by the output of this function terms in a
+   * vocabulary are grouped as duplicates. This method should be identical to
+   * the function term_merge_duplicates_process_name(), test case replies on the
+   * fact that both manipulate the string in the identical way.
+   *
+   * @param string $name
+   *   String that needs to be manipulated
+   *
+   * @return string
+   *   Processed string (normally it implies making it upper case, stripping
+   *   down any special chars, etc.)
+   */
+  private function duplicateProcessName($name) {
+    // Making upper case.
+    $name = drupal_strtoupper($name);
+    // Trying transliteration, if available.
+    if (module_exists('transliteration')) {
+      $name = transliteration_get($name);
+      // Keeping only ASCII chars.
+      $name = preg_replace('#\W#', '', $name);
+    }
+    return $name;
   }
 }
 

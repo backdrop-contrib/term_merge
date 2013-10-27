@@ -555,7 +555,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
     if (!isset($groups[$name])) {
       $groups[$name] = array();
     }
-    $groups[$name][] = $term;
+    $groups[$name][$term->tid] = $term;
   }
 
   $form['group'] = array(
@@ -568,9 +568,11 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
     if (count($group) > 1) {
       $is_any = TRUE;
 
+      $first_term = reset($group);
+
       $form['group'][$i] = array(
         '#type' => 'fieldset',
-        '#title' => $group[0]->name,
+        '#title' => $first_term->name,
         '#collapsible' => TRUE,
         '#pre_render' => array('term_merge_duplicates_fieldset_preprocess'),
         '#element_validate' => array('term_merge_duplicates_fieldset_validate'),

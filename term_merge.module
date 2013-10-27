@@ -658,7 +658,7 @@ function term_merge_merge_options_elements($vocabulary) {
  *
  * Output of this function should be used for supplying into term_merge()
  * function or for triggering actions_do('term_merge_action', ...) action. This
- * function should be invoked in a form submit hanlder for a form that used
+ * function should be invoked in a form submit handler for a form that used
  * term_merge_merge_options_elements() for generating merge settings elements.
  * It will process data and return an array of merge settings, according to the
  * data user has submitted in your form.

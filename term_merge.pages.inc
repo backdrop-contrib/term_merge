@@ -538,6 +538,8 @@ function term_merge_form_term_trunk_term_create($form, $form_state) {
  *   sought only among children of this term
  */
 function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $term = NULL) {
+  drupal_add_js(drupal_get_path('module', 'term_merge') . '/js/duplicate.form.js');
+
   // Checking if we were not given vocabulary object, we will use term object to
   // obtain the former.
   if (!is_null($term) && is_null($vocabulary)) {
@@ -549,6 +551,15 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
   // up.
   $form['help'] = array(
     '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. If this tool is invoked on a term (not on the entire vocabulary), duplicate terms will be sought only among children of that term. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children.') . '</p>',
+  );
+
+  $form['global_switch'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Select All Terms'),
+    '#description' => t('Checking here will select for merging all the encountered duplicate terms.'),
+    '#attributes' => array(
+      'class' => array('term-merge-duplicate-general-switch'),
+    ),
   );
 
   // Array of groups of terms with the same name. Each group is an array of
@@ -621,6 +632,9 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
         '#type' => 'radios',
         '#title' => t('Merge Into'),
         '#options' => $options,
+        '#attributes' => array(
+          'class' => array('term-merge-duplicate-trunk'),
+        ),
       );
     }
   }

@@ -665,6 +665,8 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
     foreach ($form_state['values']['group'] as $values) {
       // Filtering out only the selected duplicate terms.
       $term_branches = array_filter($values['duplicates']);
+      // We also do not want to have trunk term to be among the branch terms.
+      unset($term_branches[$values['trunk_tid']]);
       if (!empty($term_branches)) {
         // If something has been selected in this group we schedule its merging.
         $batch['operations'][] = array('_term_merge_batch_process', array(

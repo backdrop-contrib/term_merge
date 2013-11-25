@@ -74,7 +74,7 @@ function term_merge_menu() {
   $items['taxonomy/term/%taxonomy_term/merge/duplicates'] = array(
     'title' => 'Merge Duplicate Terms',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('term_merge_duplicates_form', 2),
+    'page arguments' => array('term_merge_duplicates_form', NULL, 2),
     'access callback' => 'term_merge_access',
     'access arguments' => array(NULL, 2),
     'file' => 'term_merge.pages.inc',

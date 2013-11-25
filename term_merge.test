@@ -822,7 +822,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
    * @param array $terms
    *   Array of taxonomy terms objects
    * @param string $message
-   *   Assertion message to be showen on the test results page
+   *   Assertion message to be shown on the test results page
    */
   protected function termMergeResistanceAssert($terms, $message) {
     foreach ($terms as $term) {
@@ -866,57 +866,68 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
 
   /**
    * Test merging duplicates feature of Term Merge module.
+   *
+   * Test the following features:
+   * - Correctness of merging a group of duplicate terms
+   * - Correctness of the mechanism that groups terms into sets of duplicate
+   *   entries, namely:
+   *   - Correctness of grouping by term name, i.e. unique terms should not be
+   *     listed in any set of duplicate terms
+   *   - Correctness of the initial set of terms, on which the duplicate tool is
+   *     invoked, i.e. when invoked on a vocabulary, we search for duplicates
+   *     in the whole vocabulary, but when invoked on a term, the tool should
+   *     only search for duplicate among the children of that term
    */
   public function testDuplicates() {
     // Creating duplicate terms firstly.
     $groups = array(
       'single' => 1,
-      'double' => 2,
+      'triple_different_parent' => 3,
       'random' => rand(2, 5),
+      // We need some term, that will be a parent of some other terms.
+      'parent' => 1,
     );
     $groups = $this->createTerms($groups);
+
+    // Let us make two of 'triple_different_parent' terms children of 'parent'
+    // term.
+    $groups['triple_different_parent'][1]->parent = $groups['parent'][0]->tid;
+    taxonomy_term_save($groups['triple_different_parent'][1]);
+    $groups['triple_different_parent'][2]->parent = $groups['parent'][0]->tid;
+    taxonomy_term_save($groups['triple_different_parent'][2]);
 
     // Assuring the single term is not listed as duplicate.
     $this->drupaLGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates');
     $this->assertNoText($groups['single'][0]->name, 'Single term is not listed as a duplicate.');
 
-    // Deciding what terms to merge.
+    // Making sure the term in 'triple_different_parent' that does not have a
+    // parent, is not listed when we invoke duplicate tool on a parent term.
+    $this->drupalGet('taxonomy/term/' . $groups['parent'][0]->tid . '/merge/duplicates');
+    $this->assertNoFieldByName('group[' . $this->duplicateProcessName('triple_different_parent') . '][duplicates][' . $groups['triple_different_parent'][0]->tid . ']', 'Duplicate term is not listed when it is not among children of a term, on which Term Merge module was invoked.');
+
     $edit = array();
-    foreach ($groups as $name => $terms) {
-      $edit_key = $this->duplicateProcessName($name);
-      // Firstly we pick the trunk term, to make it easier, let it be the 1st
-      // term of available collection.
-      $edit['group[' . $edit_key . '][trunk_tid]'] = $terms[0]->tid;
-      switch ($name) {
-        case 'single':
-          // For this case we do not expect to merge anything, so we just revert
-          // our selected trunk term.
-          unset($edit['group[' . $edit_key . '][trunk_tid]']);
-          break;
+    // Trying to merge a term into another, invoking Duplicate tool on a parent
+    // term of both. Important note: we do not test merging options, because
+    // supposedly those are tested in the main test of this module.
+    $edit['group[' . $this->duplicateProcessName('triple_different_parent') . '][trunk_tid]'] = $groups['triple_different_parent'][1]->tid;
+    $edit['group[' . $this->duplicateProcessName('triple_different_parent') . '][duplicates][' . $groups['triple_different_parent'][2]->tid . ']'] = TRUE;
+    $groups['triple_different_parent'][2]->merged = TRUE;
+    $this->drupalPost('taxonomy/term/' . $groups['parent'][0]->tid . '/merge/duplicates', $edit, 'Submit');
 
-        case 'double':
-          $edit['group[' . $edit_key . '][duplicates][' . $terms[1]->tid . ']'] = TRUE;
-          $groups[$name][1]->merged = TRUE;
-          break;
-
-        case 'random':
-          // In case of random, we merge all but the 1st term.
-          foreach ($terms as $k => $term) {
-            if ($k != 0) {
-              $edit['group[' . $edit_key . '][duplicates][' . $term->tid . ']'] = TRUE;
-              $groups[$name][$k]->merged = TRUE;
-            }
-          }
-          break;
+    //  Trying to merge multiple terms. We merge all but the 1st term.
+    $edit = array();
+    $edit['group[' . $this->duplicateProcessName('random') . '][trunk_tid]'] = $groups['random'][0]->tid;
+    foreach ($groups['random'] as $k => $term) {
+      if ($k != 0) {
+        $edit['group[' . $this->duplicateProcessName('random') . '][duplicates][' . $term->tid . ']'] = TRUE;
+        $groups['random'][$k]->merged = TRUE;
       }
     }
-    // We do not test merging options, because supposedly those are tested in
-    // the main test of this module.
     $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', $edit, 'Submit');
 
     // Asserting results of merging.
-    foreach ($groups as $name => $terms) {
-      foreach ($terms as $term) {
+    foreach  ($groups as $group) {
+      foreach ($group as $term) {
         $this->drupalGet('taxonomy/term/' . $term->tid);
         $code = isset($term->merged) && $term->merged ? 404 : 200;
         $message = isset($term->merged) && $term->merged ? 'Term #' . $term->tid . ' has been successfully merged.' : 'Term #' . $term->tid . ' has been successfully untouched during merging.';

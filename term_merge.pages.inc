@@ -529,22 +529,26 @@ function term_merge_form_term_trunk_term_create($form, $form_state) {
  * Allow merging terms with the same or similar names.
  *
  * @param object $vocabulary
- *   Fully loaded taxonomy vocabulary object inside of which term merging occurs
- *   or fully loaded taxonomy term object using which the function will pull up
- *   the vocabulary inside of which term merging occurs
+ *   Fully loaded taxonomy vocabulary object inside of which term merging
+ *   occurs, if this argument is omitted, then $term is required and will be
+ *   used to obtain information about Taxonomy vocabulary
+ * @param object $term
+ *   Fully loaded taxonomy term object using which the function will pull up
+ *   the vocabulary inside of which term merging occurs. Duplicate terms will be
+ *   sought only among children of this term
  */
-function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
-  // Checking if we were given vocabulary object, or term object.
-  if (isset($vocabulary->tid)) {
-    // It's term object, we have to substitute it with a vocabulary object.
-    $vocabulary = taxonomy_vocabulary_load($vocabulary->vid);
+function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $term = NULL) {
+  // Checking if we were not given vocabulary object, we will use term object to
+  // obtain the former.
+  if (!is_null($term) && is_null($vocabulary)) {
+    $vocabulary = taxonomy_vocabulary_load($term->vid);
   }
-  $tree = taxonomy_get_tree($vocabulary->vid);
+  $tree = taxonomy_get_tree($vocabulary->vid, is_null($term) ? 0 : $term->tid);
 
   // Helpful and self explaining text that should help people understand what's
   // up.
   $form['help'] = array(
-    '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children. Each group consists of a table of found duplicates. Tick on the terms you would like to merge and choose the term into which you want to merge the ticked on terms.') . '</p>',
+    '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. If this tool is invoked on a term (not on the entire vocabulary), duplicate terms will be sought only among children of that term. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children.') . '</p>',
   );
 
   // Array of groups of terms with the same name. Each group is an array of
@@ -635,10 +639,18 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary) {
     );
   }
   else {
-    $form['nothing_found'] = array(
-      '#markup' => '<p><b>' . t('Sorry, seems like we were not able to find any possible duplicate terms in %vocabulary vocabulary.', array(
+    if (is_null($term)) {
+      $no_match_text = t('Sorry, seems like we were not able to find any possible duplicate terms in %vocabulary vocabulary.', array(
         '%vocabulary' => $vocabulary->name,
-      )) . '</b></p>',
+      ));
+    }
+    else {
+      $no_match_text = t('Sorry, seems like we were not able to find any possible duplicate terms among children of %term term.', array(
+        '%term' => $term->name,
+      ));
+    }
+    $form['nothing_found'] = array(
+      '#markup' => '<p><b>' . $no_match_text . '</b></p>',
     );
   }
 

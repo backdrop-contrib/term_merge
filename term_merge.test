@@ -868,7 +868,11 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
    * Test merging duplicates feature of Term Merge module.
    *
    * Test the following features:
-   * - Correctness of merging a group of duplicate terms
+   * - Correctness of merging a group of duplicate terms, namely:
+   *   - Correctness of merge operation when duplicates feature is invoked on
+   *     the entire vocabulary
+   *   - Correctness of merge operation when duplicates feature is invoked on a
+   *     term (merge its children one into another)
    * - Correctness of the mechanism that groups terms into sets of duplicate
    *   entries, namely:
    *   - Correctness of grouping by term name, i.e. unique terms should not be

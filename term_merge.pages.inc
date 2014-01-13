@@ -553,14 +553,8 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
     '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. If this tool is invoked on a term (not on the entire vocabulary), duplicate terms will be sought only among children of that term. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children.') . '</p>',
   );
 
-  $form['global_switch'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Select All Terms'),
-    '#description' => t('Checking here will select for merging all the encountered duplicate terms.'),
-    '#attributes' => array(
-      'class' => array('term-merge-duplicate-general-switch'),
-    ),
-  );
+  // Whether there is at least one group of possible duplicate terms found.
+  $is_any = FALSE;
 
   // Array of groups of terms with the same name. Each group is an array of
   // duplicates. Trunk term of each group will be chosen by user.
@@ -570,14 +564,26 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
     if (!isset($groups[$name])) {
       $groups[$name] = array();
     }
+    else {
+      $is_any = TRUE;
+    }
     $groups[$name][$term->tid] = $term;
+  }
+
+  if ($is_any) {
+    $form['global_switch'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Select All Terms'),
+      '#description' => t('Checking here will select for merging all the encountered duplicate terms.'),
+      '#attributes' => array(
+        'class' => array('term-merge-duplicate-general-switch'),
+      ),
+    );
   }
 
   $form['group'] = array(
     '#tree' => TRUE,
   );
-  // Whether there is at least one group of possible duplicate terms found.
-  $is_any = FALSE;
 
   foreach ($groups as $i => $group) {
     if (count($group) > 1) {
@@ -604,9 +610,11 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
         }
         // Adding Root to the hierarchy.
         $parents[] = t('Vocabulary Root');
+
         $options[$term->tid] = array(
           'id' => $term->tid,
           'title' => l($term->name, 'taxonomy/term/' . $term->tid),
+          'language' => isset($term->language) ? $term->language : LANGUAGE_NONE,
           'description' => check_markup($term->description, $term->format),
           'parents' => implode(' &raquo; ', $parents),
         );
@@ -619,6 +627,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
           'id' => t('ID'),
           'title' => t('Title'),
           'description' => t('Description'),
+          'language' => t('Language'),
           'parents' => t('Parents'),
         ),
         '#options' => $options,

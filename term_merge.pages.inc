@@ -38,7 +38,7 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
       // be used for taxonomy selects.
       $form['term_branch'] = array(
         '#type' => 'hierarchical_select',
-        // @todo: firgure out why #required => TRUE doesn't work.
+        // @todo: figure out why #required => TRUE doesn't work.
         // As a matter of fact, this issue seems to cover our case.
         // http://drupal.org/node/1275862.
         //'#required' => TRUE,
@@ -610,11 +610,15 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
         }
         // Adding Root to the hierarchy.
         $parents[] = t('Vocabulary Root');
+        $language = isset($term->language) ? $term->language : LANGUAGE_NONE;
+        if ($language == LANGUAGE_NONE) {
+          $language = t('Not Specified');
+        }
 
         $options[$term->tid] = array(
           'id' => $term->tid,
           'title' => l($term->name, 'taxonomy/term/' . $term->tid),
-          'language' => isset($term->language) ? $term->language : LANGUAGE_NONE,
+          'language' => $language,
           'description' => check_markup($term->description, $term->format),
           'parents' => implode(' &raquo; ', $parents),
         );

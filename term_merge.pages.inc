@@ -602,14 +602,14 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
       $options = array();
       foreach ($group as $term) {
         $parents = array();
+        // Adding Root to the hierarchy.
+        $parents[] = t('Vocabulary Root');
         foreach (taxonomy_get_parents_all($term->tid) as $parent) {
           // We do not include the current term in the hierarchy.
           if ($parent->tid != $term->tid) {
             $parents[] = $parent->name;
           }
         }
-        // Adding Root to the hierarchy.
-        $parents[] = t('Vocabulary Root');
         $language = isset($term->language) ? $term->language : LANGUAGE_NONE;
         if ($language == LANGUAGE_NONE) {
           $language = t('Not Specified');

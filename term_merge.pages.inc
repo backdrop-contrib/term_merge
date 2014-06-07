@@ -250,7 +250,7 @@ function term_merge_form_submit($form, &$form_state) {
 
     term_merge(array_values($form_state['values']['term_branch']), $term_trunk->tid, $form_state['storage']['merge_settings']);
 
-    $form_state['redirect'] = array('admin/structure/taxonomy/' . $term_trunk->vocabulary_machine_name);
+    $form_state['redirect'] = array('taxonomy/term/' . $term_trunk->tid);
   }
 }
 

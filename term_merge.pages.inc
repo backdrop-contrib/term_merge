@@ -587,7 +587,6 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
 
   foreach ($groups as $i => $group) {
     if (count($group) > 1) {
-      $is_any = TRUE;
       // Sorting terms by tid for better usage experience.
       ksort($group);
 

@@ -36,10 +36,10 @@
           var term_branches = container.find('table:not(.sticky-header) .select-all .form-checkbox');
           if ($(this).is(':checked')) {
             term_branches.attr('checked', true).trigger({
-             type: 'click',
-             target: this
-             });
-            // For some reason the checkboxes get unchecked, we check the back.
+              type: 'click',
+              target: this
+            });
+            // For some reason the checkboxes get unchecked, we check them back.
             term_branches.attr('checked', true);
 
             // We also want to trigger "change" on those radio buttons, see
@@ -48,9 +48,9 @@
           }
           else {
             term_branches.removeAttr('checked').trigger({
-             type: 'click',
-             target: this
-             });
+              type: 'click',
+              target: this
+            });
             // For some reason the checkboxes get checked, we uncheck them back.
             term_branches.removeAttr('checked');
 

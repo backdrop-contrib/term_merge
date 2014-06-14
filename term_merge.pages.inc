@@ -539,20 +539,21 @@ function term_merge_form_term_trunk_term_create($form, $form_state) {
  *   Fully loaded taxonomy vocabulary object inside of which term merging
  *   occurs, if this argument is omitted, then $term is required and will be
  *   used to obtain information about Taxonomy vocabulary
- * @param object $term
+ * @param object $parent_term
  *   Fully loaded taxonomy term object using which the function will pull up
  *   the vocabulary inside of which term merging occurs. Duplicate terms will be
  *   sought only among children of this term
  */
-function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $term = NULL) {
+function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $parent_term = NULL) {
   drupal_add_js(drupal_get_path('module', 'term_merge') . '/js/duplicate.form.js');
 
   // Checking if we were not given vocabulary object, we will use term object to
   // obtain the former.
-  if (!is_null($term) && is_null($vocabulary)) {
-    $vocabulary = taxonomy_vocabulary_load($term->vid);
+  if (!is_null($parent_term) && is_null($vocabulary)) {
+    $vocabulary = taxonomy_vocabulary_load($parent_term->vid);
   }
-  $tree = taxonomy_get_tree($vocabulary->vid, is_null($term) ? 0 : $term->tid);
+
+  $tree = taxonomy_get_tree($vocabulary->vid, is_null($parent_term) ? 0 : $parent_term->tid);
 
   // Helpful and self explaining text that should help people understand what's
   // up.
@@ -560,25 +561,75 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
     '#markup' => '<p>' . t('Here you can merge terms with the same names. It is a useful tool against term-duplicates. If this tool is invoked on a term (not on the entire vocabulary), duplicate terms will be sought only among children of that term. The terms are grouped by names. Term into which the merging will occur is selected manually by user, however you must know that it is impossible to merge a parent term into any of its children.') . '</p>',
   );
 
-  // Whether there is at least one group of possible duplicate terms found.
-  $is_any = FALSE;
+  $form['scaling'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Scaling for large vocabularies'),
+    '#description' => t('Adjust these settings if your vocabulary is very large.'),
+    '#tree' => TRUE,
+    '#collapsible' => TRUE,
+  );
+
+  $form['scaling']['help'] = array(
+    '#markup' => '<p>' . format_plural(count($tree), 'Vocabulary %vocabulary has only 1 term. It is very unlikely you will merge anything here.', 'Vocabulary %vocabulary has @count terms. If this tool works slow, you may instruct the duplicate finder tool to terminate its work after it has found a specific number of possible duplicates.', array(
+      '%vocabulary' => $vocabulary->name,
+    )) . '</p>',
+  );
+
+  $form['scaling']['max_duplicates'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Show N duplicates'),
+    '#description' => t('Input an integer here - this many duplicates will be show on the form. Once this amount of possible duplicates is found, the search process terminates.'),
+    '#required' => TRUE,
+    '#default_value' => isset($form_state['values']['scaling']['max_duplicates']) ? $form_state['values']['scaling']['max_duplicates'] : 300,
+    '#element_validate' => array('element_validate_integer_positive'),
+  );
+
+  $form['scaling']['update'] = array(
+    '#type' => 'button',
+    '#value' => t('Re-run duplicate search'),
+    '#ajax' => array(
+      'callback' => 'term_merge_duplicates_form_scaling',
+      'wrapper' => 'term-merge-duplicate-wrapper',
+      'method' => 'replace',
+      'effect' => 'fade',
+    ),
+  );
+
+  // Amount of found duplicates.
+  $count = 0;
 
   // Array of groups of terms with the same name. Each group is an array of
   // duplicates. Trunk term of each group will be chosen by user.
   $groups = array();
+
   foreach ($tree as $term) {
+    if ($count >= $form['scaling']['max_duplicates']['#default_value']) {
+      // We have reached the limit of possible duplicates to be found.
+      break;
+    }
     $name = term_merge_duplicates_process_name($term->name);
     if (!isset($groups[$name])) {
       $groups[$name] = array();
     }
     else {
-      $is_any = TRUE;
+      // We increment count by one for the just encountered duplicate. Plus, if
+      // it is the second duplicate in this group, we also increment it by one
+      // for the 1st duplicate in the group.
+      $count++;
+      if (count($groups[$name]) == 1) {
+        $count++;
+      }
     }
     $groups[$name][$term->tid] = $term;
   }
 
-  if ($is_any) {
-    $form['global_switch'] = array(
+  $form['wrapper'] = array(
+    '#prefix' => '<div id="term-merge-duplicate-wrapper">',
+    '#suffix' => '</div>',
+  );
+
+  if ($count > 0) {
+    $form['wrapper']['global_switch'] = array(
       '#type' => 'checkbox',
       '#title' => t('Select All Terms'),
       '#description' => t('Checking here will select for merging all the encountered duplicate terms.'),
@@ -588,7 +639,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
     );
   }
 
-  $form['group'] = array(
+  $form['wrapper']['group'] = array(
     '#tree' => TRUE,
   );
 
@@ -598,14 +649,6 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
       ksort($group);
 
       $first_term = reset($group);
-
-      $form['group'][$i] = array(
-        '#type' => 'fieldset',
-        '#title' => $first_term->name,
-        '#collapsible' => TRUE,
-        '#pre_render' => array('term_merge_duplicates_fieldset_preprocess'),
-        '#element_validate' => array('term_merge_duplicates_fieldset_validate'),
-      );
 
       $options = array();
       foreach ($group as $term) {
@@ -632,7 +675,15 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
         );
       }
 
-      $form['group'][$i]['duplicates'] = array(
+      $form['wrapper']['group'][$i] = array(
+        '#type' => 'fieldset',
+        '#title' => $first_term->name,
+        '#collapsible' => TRUE,
+        '#pre_render' => array('term_merge_duplicates_fieldset_preprocess'),
+        '#element_validate' => array('term_merge_duplicates_fieldset_validate'),
+      );
+
+      $form['wrapper']['group'][$i]['duplicates'] = array(
         '#type' => 'tableselect',
         '#title' => 'Duplicates',
         '#header' => array(
@@ -649,7 +700,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
       foreach ($group as $term) {
         $options[$term->tid] = $term->name;
       }
-      $form['group'][$i]['trunk_tid'] = array(
+      $form['wrapper']['group'][$i]['trunk_tid'] = array(
         '#type' => 'radios',
         '#title' => t('Merge Into'),
         '#options' => $options,
@@ -660,7 +711,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
     }
   }
 
-  if ($is_any) {
+  if ($count > 0) {
     // Adding necessary options of merging.
     $form += term_merge_merge_options_elements($vocabulary);
 
@@ -674,14 +725,15 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $te
     );
   }
   else {
-    if (is_null($term)) {
+    if (is_null($parent_term)) {
       $no_match_text = t('Sorry, seems like we were not able to find any possible duplicate terms in %vocabulary vocabulary.', array(
         '%vocabulary' => $vocabulary->name,
       ));
     }
     else {
-      $no_match_text = t('Sorry, seems like we were not able to find any possible duplicate terms among children of %term term.', array(
-        '%term' => $term->name,
+      $no_match_text = t('Sorry, seems like we were not able to find any possible duplicate terms among children of %term term. You may want to search for duplicates through the entire <a href="!url">vocabulary</a>.', array(
+        '%term' => $parent_term->name,
+        '!url' => url('admin/structure/taxonomy/' . $vocabulary->machine_name . '/merge/duplicates'),
       ));
     }
     $form['nothing_found'] = array(
@@ -720,8 +772,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
           $term_branches,
           $values['trunk_tid'],
           $merge_settings,
-        ),
-        );
+        ));
       }
     }
   }
@@ -773,7 +824,7 @@ function term_merge_duplicates_fieldset_preprocess($element) {
       'trunk' => drupal_render($element['trunk_tid'][$tid]),
     ) + $options[$tid];
   }
-  $element['trunk_tid']['#title_display'] = 'invisble';
+  $element['trunk_tid']['#title_display'] = 'invisible';
   $element['duplicates']['#header'] = array(
     'trunk' => $element['trunk_tid']['#title'],
   ) + $element['duplicates']['#header'];
@@ -795,4 +846,14 @@ function term_merge_duplicates_fieldset_validate($element, &$form_state, $form) 
       '%group_label' => $element['#title'],
     )));
   }
+}
+
+/**
+ * Ajax callback function.
+ *
+ * Used in term_merge_duplicates_form() to replace the duplicates tables with
+ * new data per current scaling settings.
+ */
+function term_merge_duplicates_form_scaling($form, &$form_state) {
+  return $form['wrapper'];
 }

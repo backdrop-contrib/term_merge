@@ -1160,20 +1160,6 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
    *   Assert message to be shown on test results page
    */
   protected function assertRedirectIntegration($terms, $message) {
-    // Getting a list of set up redirects in Redirect module.
-    $response = $this->drupalGet('admin/config/search/redirect');
-    $matches = array();
-    preg_match('#\<table[^>]+class="redirect-list-tableselect[^"]*"[^>]*\>.*?\<tbody\>(.*?)\</tbody\>.*?\</table\>#si', $response, $matches);
-    $response = $matches[1];
-    $matches = array();
-    preg_match_all('#\<tr[^>]*\>.*?\<td[^>]*\>\<a[^>]*\>(.+?)\</a\>.*?\<a[^>]*\>(.+?)\</a\>\</td\>.*?\</tr\>#si', $response, $matches);
-    $redirects = array();
-    foreach ($matches[0] as $k => $v) {
-      $redirects[] = array(
-        'source' => $matches[1][$k],
-        'redirect' => $matches[2][$k],
-      );
-    }
     foreach ($terms as $term) {
       if (isset($term->redirect)) {
         $sources = array('taxonomy/term/' . $term->tid);
@@ -1183,23 +1169,11 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
         }
         $redirect = drupal_get_path_alias('taxonomy/term/' . $term->redirect->tid);
         foreach ($sources as $source) {
-          $is_found = FALSE;
-          foreach ($redirects as $k => $v) {
-            if ($v['source'] == $source && $v['redirect'] == $redirect) {
-              unset($redirects[$k]);
-              $is_found = TRUE;
-              break;
-            }
-          }
-          if (!$is_found) {
-            $this->fail($message);
-            return;
-          }
+          $this->drupalGet($source);
+          $this->assertEqual($this->getUrl(), url($redirect, array('absolute' => TRUE)), $message);
         }
       }
     }
-    // If we got here, then all expected redirections were found.
-    $this->pass($message);
   }
 
   /**

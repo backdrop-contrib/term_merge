@@ -462,7 +462,7 @@ function term_merge_action($object, $context) {
     $redirect = new stdClass();
     redirect_object_prepare($redirect, array(
       'source' => $v,
-      'redirect' => drupal_get_path_alias('taxonomy/term/' . $term_trunk->tid),
+      'redirect' => 'taxonomy/term/' . $term_trunk->tid,
       'status_code' => $context['redirect'],
     ));
     // avoid duplicate entry errors

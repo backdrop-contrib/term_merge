@@ -32,6 +32,8 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
   if (!isset($form_state['storage']['confirm'])) {
     // We are at the set up step.
 
+    $tree = taxonomy_get_tree($vocabulary->vid);
+
     $term_branch_value = is_null($term) ? NULL : array($term->tid);
     if (variable_get('taxonomy_override_selector', FALSE) && module_exists('hs_taxonomy')) {
       // We use Hierarchical Select module if it's available and configured to
@@ -70,7 +72,6 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     }
     else {
       // Falling back on a simple <select>.
-      $tree = taxonomy_get_tree($vocabulary->vid);
       $options = array();
       foreach ($tree as $k => $v) {
         $options[$v->tid] = str_repeat('-', $v->depth) . $v->name;
@@ -121,6 +122,12 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     else {
       $term_trunk_widget_options['select'] = t('Select');
       $term_trunk_widget = 'select';
+    }
+
+    // If the vocabulary is too big, by default we want the trunk term widget to
+    // be autocomplete instead of select or hs_taxonomy.
+    if (count($tree) > 200) {
+      $term_trunk_widget = 'autocomplete';
     }
 
     // Override the term trunk widget if settings are found in $form_state.

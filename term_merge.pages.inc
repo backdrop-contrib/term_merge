@@ -74,7 +74,7 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
       // Falling back on a simple <select>.
       $options = array();
       foreach ($tree as $k => $v) {
-        $options[$v->tid] = str_repeat('-', $v->depth) . $v->name;
+        $options[$v->tid] = str_repeat('-', $v->depth) . $v->name . ' [tid: ' . $v->tid . ']';
         // Additionally we key the $tree by term->tid.
         unset($tree[$k]);
         $tree[$v->tid] = $v;
@@ -274,7 +274,7 @@ function term_merge_form_term_trunk_widget_select(&$form, &$form_state, $vocabul
   $tree = taxonomy_get_tree($vocabulary->vid);
   $options = array();
   foreach ($tree as $k => $v) {
-    $options[$v->tid] = str_repeat('-', $v->depth) . $v->name;
+    $options[$v->tid] = str_repeat('-', $v->depth) . $v->name . ' [tid: ' . $v->tid . ']';
     // Additionally we key the $tree by term->tid.
     unset($tree[$k]);
     $tree[$v->tid] = $v;
@@ -498,13 +498,13 @@ function term_merge_form_term_trunk_widget_autocomplete_autocomplete($vocabulary
     ->fetchAllKeyed();
 
   $term_matches = array();
-  foreach ($tags_return as $name) {
+  foreach ($tags_return as $tid => $name) {
     $n = $name;
     // Term names containing commas or quotes must be wrapped in quotes.
     if (strpos($name, ',') !== FALSE || strpos($name, '"') !== FALSE) {
       $n = '"' . str_replace('"', '""', $name) . '"';
     }
-    $term_matches[$n] = check_plain($name);
+    $term_matches[$n] = check_plain($name . ' [tid: ' . $tid . ']');
   }
 
   drupal_json_output($term_matches);

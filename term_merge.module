@@ -310,22 +310,22 @@ function term_merge_action($object, $context) {
   // firstly we go through the list of all fields searching for
   // taxonomy_term_reference field type because potentially some of these fields
   // values will have to be updated after merging terms.
-  $fields = field_info_fields();
+  $fields = field_info_field_map();
   $result = array();
-  foreach ($fields as $k => $v) {
+  foreach ($fields as $field_name => $v) {
     // Additionally we group by field_name to know what field has to be updated
     // in each found entity.
     // @todo: Here would be nice to throw in a hook, allowing other modules to
     // supply meta data about their field types if they also use taxonomy
     // references, defining it in their own field types.
     if ($v['type'] == 'taxonomy_term_reference') {
-      $result[$k] = array();
+      $result[$field_name] = array();
       $query = new EntityFieldQuery();
       // Making sure we search in the entire scope of entities.
       $query->addMetaData('account', user_load(1));
-      $query->fieldCondition($v['field_name'], 'tid', $term_branch->tid);
+      $query->fieldCondition($field_name, 'tid', $term_branch->tid);
       $_result = $query->execute();
-      $result[$k] = array_merge_recursive($result[$k], $_result);
+      $result[$field_name] = array_merge_recursive($result[$field_name], $_result);
     }
   }
   // Now we load all entities that have taxonomy_term_reference pointing to
@@ -367,7 +367,7 @@ function term_merge_action($object, $context) {
           }
           // Above in the code, while looping through all deltas of this field,
           // we might have unset some of the deltas to keep term references
-          // unique. We should better keep deltas as a serie of consecutive
+          // unique. We should better keep deltas as a series of consecutive
           // numbers, because it is what it is supposed to be.
           $entity->{$field_name}[$language] = array_values($entity->{$field_name}[$language]);
         }
@@ -389,7 +389,7 @@ function term_merge_action($object, $context) {
   // same time we have to get the path alias of the $term_branch before it gets
   // deleted. Otherwise the path alias will be deleted along with the term
   // itself. Similarly would be lost all redirects pointing to branch term
-  // paths. We will redirect normal path to term and its RSS feed.
+  // paths. We will redirect normal term path and its RSS feed.
   $redirect_paths = array();
   if ($context['redirect'] != TERM_MERGE_NO_REDIRECT) {
     $redirect_paths['taxonomy/term/' . $term_trunk->tid] = array(
@@ -622,9 +622,11 @@ function term_merge_merge_options_elements($vocabulary) {
   );
 
   if (module_exists('redirect')) {
-    $options = array(TERM_MERGE_NO_REDIRECT => 'No redirect') + array(
-      0 => t('Default (@default)',
-        array('@default' => variable_get('redirect_default_status_code', 301))),
+    $options = array(
+      TERM_MERGE_NO_REDIRECT => t('No redirect'),
+      0 => t('Default (@default)', array(
+        '@default' => variable_get('redirect_default_status_code', 301),
+      )),
     ) + redirect_status_code_options();
     $form['redirect'] = array(
       // We respect access rights defined in redirect.module here.

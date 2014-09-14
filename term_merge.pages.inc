@@ -73,11 +73,8 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     else {
       // Falling back on a simple <select>.
       $options = array();
-      foreach ($tree as $k => $v) {
+      foreach ($tree as $v) {
         $options[$v->tid] = str_repeat('-', $v->depth) . $v->name . ' [tid: ' . $v->tid . ']';
-        // Additionally we key the $tree by term->tid.
-        unset($tree[$k]);
-        $tree[$v->tid] = $v;
       }
       $form['term_branch'] = array(
         '#type' => 'select',
@@ -141,7 +138,7 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
       '#required' => TRUE,
       '#options' => $term_trunk_widget_options,
       '#default_value' => $term_trunk_widget,
-      '#description' => t('Please, choose what widget you prefer for entering the term trunk. Note, in autocomplete widget you will not have an option for creating a new term and then it using as the term trunk.'),
+      '#description' => t('Choose what widget you prefer for entering the term trunk.'),
       '#ajax' => array(
         'callback' => 'term_merge_form_term_trunk',
         'wrapper' => 'term-merge-form-term-trunk',
@@ -158,19 +155,9 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
     // unpleasant effects like showing tid instead of term's name or vice-versa.
     // I think we should just empty $form_state['values'] for the term trunk
     // form element when widget changes. Better ideas are welcome!
-    switch ($term_trunk_widget) {
-      case 'select':
-        term_merge_form_term_trunk_widget_select($form, $form_state, $vocabulary);
-        break;
+    $function = 'term_merge_form_term_trunk_widget_' . $term_trunk_widget;
+    $function($form, $form_state, $vocabulary);
 
-      case 'autocomplete':
-        term_merge_form_term_trunk_widget_autocomplete($form, $form_state, $vocabulary);
-        break;
-
-      case 'hs_taxonomy':
-        term_merge_form_term_trunk_widget_hs_taxonomy($form, $form_state, $vocabulary);
-        break;
-    }
     // Ensuring the Merge Into form element has the same title no matter what
     // widget has been used.
     $form['term_trunk']['tid']['#title'] = t('Merge into');
@@ -273,11 +260,8 @@ function term_merge_form_submit($form, &$form_state) {
 function term_merge_form_term_trunk_widget_select(&$form, &$form_state, $vocabulary) {
   $tree = taxonomy_get_tree($vocabulary->vid);
   $options = array();
-  foreach ($tree as $k => $v) {
+  foreach ($tree as $v) {
     $options[$v->tid] = str_repeat('-', $v->depth) . $v->name . ' [tid: ' . $v->tid . ']';
-    // Additionally we key the $tree by term->tid.
-    unset($tree[$k]);
-    $tree[$v->tid] = $v;
   }
 
   $term_branch_value = array();
@@ -309,7 +293,7 @@ function term_merge_form_term_trunk_widget_select(&$form, &$form_state, $vocabul
   $form['term_trunk']['tid'] = array(
     '#type' => 'select',
     '#required' => TRUE,
-    '#description' => t('Please, choose into what term you want to merge.'),
+    '#description' => t('Choose into what term you want to merge.'),
     '#options' => $options,
     '#ajax' => array(
       'callback' => 'term_merge_form_term_trunk_term_create',
@@ -350,7 +334,7 @@ function term_merge_form_term_trunk_widget_select(&$form, &$form_state, $vocabul
       $form['term_trunk']['term_create']['relations']['parent']['#options'] = array_slice($form['term_trunk']['term_create']['relations']['parent']['#options'], 0, 1, TRUE) + $options;
     }
 
-    // For each field attached to taxonomy term of this vocabualry that has
+    // For each field attached to taxonomy term of this vocabulary that has
     // unlimited cardinality we have to extra process the results, otherwise
     // "Add another item" button doesn't work.
     $instances = field_info_instances($form['term_trunk']['term_create']['#entity_type'], $form['term_trunk']['term_create']['#bundle']);
@@ -429,7 +413,7 @@ function term_merge_form_term_trunk_widget_autocomplete(&$form, &$form_state, $v
  * Supportive function.
  *
  * Validate form element of the autocomplete widget of term trunk element of
- * the form term_merge_form(). Make sure the enetered string is a name of one of
+ * the form term_merge_form(). Make sure the entered string is a name of one of
  * the existing terms in the vocabulary where the merge occurs. If term is found
  * the function substitutes the name with its {taxonomy_term_data}.tid as it is
  * what is expected from a term trunk widget to provide in its value.

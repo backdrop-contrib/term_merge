@@ -62,7 +62,7 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
    *   Fully loaded taxonomy vocabulary object
    *
    * @return object
-   *   Fully loaded taxonomy term object of the last interted term into
+   *   Fully loaded taxonomy term object of the last inserted term into
    *   the specified vocabulary
    */
   protected function getLastTerm($vocabulary) {
@@ -386,7 +386,8 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
    * Test all cases for potentially "buggy" input.
    *
    * Test the functionality of the action "Term Merge" with various suspicious
-   * input arguments, and testing the web UI of the module with suspicios input.
+   * input arguments, and testing the web UI of the module with suspicious
+   * input.
    */
   public function testTermMergeResistance() {
     drupal_static_reset();
@@ -471,9 +472,9 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     $account = $this->drupalCreateUser(array('merge vocabulary2 terms'));
     $this->drupalLogin($account);
     $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
-    $this->assertResponse(403, 'Per vocabulary term merge permissions are repsected in the module - an account cannot merge terms in the vocabulary in which he is not supposed to be able to merge.');
+    $this->assertResponse(403, 'Per vocabulary term merge permissions are respected in the module - an account cannot merge terms in the vocabulary in which he is not supposed to be able to merge.');
     $this->drupalGet('admin/structure/taxonomy/vocabulary2/merge');
-    $this->assertResponse(200, 'Per vocabulary term merge permissions are repsected in the module - an account can merge terms in the vocabulary in which he is supposed to be able to merge.');
+    $this->assertResponse(200, 'Per vocabulary term merge permissions are respected in the module - an account can merge terms in the vocabulary in which he is supposed to be able to merge.');
   }
 
   /**
@@ -1310,7 +1311,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
   }
 
   /**
-   * Test Term Merge batch in terms of integration with Redirect/Path modules.
+   * Test Term Merge batch in terms of integration with Synonyms module.
    */
   public function testTermMergeBatch() {
     // Trying to merge without synonyms adding.
@@ -1542,6 +1543,6 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
 
     $this->view->set_display('default');
     $filter = $this->view->display_handler->display->display_options['filters'][$columns['tid']]['value'];
-    $this->assertTrue(count($filter) == 1 && in_array($terms['trunk']->tid, array_keys($filter)), 'Views term reference filter gets uptdated to filter on trunk term instead of filtering on branch term if the branch term is instructed to be deleted during merging of terms.');
+    $this->assertTrue(count($filter) == 1 && in_array($terms['trunk']->tid, array_keys($filter)), 'Views term reference filter gets updated to filter on trunk term instead of filtering on branch term if the branch term is instructed to be deleted during merging of terms.');
   }
 }

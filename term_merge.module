@@ -470,7 +470,7 @@ function term_merge_action($object, $context) {
     taxonomy_term_delete($term_branch->tid);
   }
 
-  // Here we do the 2nd part of integraiton with the Redirect module. Once the
+  // Here we do the 2nd part of integration with the Redirect module. Once the
   // branch term has been deleted (if deleted), we can add the redirects
   // without being afraid that the redirect module will delete them in its
   // hook_entity_delete().
@@ -537,10 +537,10 @@ function term_merge_action($object, $context) {
  */
 function term_merge($term_branch, $term_trunk, $merge_settings = array()) {
   // Older versions of this module had another interface of this function,
-  // as backword capability we still support the older interface, instead of
+  // as backward capability we still support the older interface, instead of
   // supplying a $merge_settings array, it was supplying all the settings as
   // additional function arguments.
-  // @todo: delete this backword capability at some point.
+  // @todo: delete this backward capability at some point.
   if (!is_array($merge_settings)) {
     $merge_settings = array(
       'term_branch_keep' => $merge_settings,

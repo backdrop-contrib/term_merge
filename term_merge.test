@@ -1086,7 +1086,29 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
     ));
     $this->assertRedirectIntegration($terms, 'No redirects are made, if action is not instructed to make ones.');
 
-    // Testing 301 redirection.
+    // Testing 301 redirection. Besides redirecting 'taxonomy/term/[branch-tid]'
+    // to 'taxonomy/term/[trunk-tid]' and their path aliases we want to
+    // additionally assert that all existing redirects to branch term will be
+    // replaced with redirects to trunk term in Redirect module. Lastly, we also
+    // assert that 'taxonomy/term/[branch-tid]/feed' path and all pointing there
+    // redirects now point to 'taxonomy/term/[trunk-tid]/feed.
+    $redirect_source = $this->randomName();
+    $redirect = new stdClass();
+    redirect_object_prepare($redirect, array(
+      'source' => $redirect_source,
+      'redirect' => 'taxonomy/term/' . $terms['branch']->tid,
+    ));
+    redirect_hash($redirect);
+    redirect_save($redirect);
+
+    $redirect = new stdClass();
+    redirect_object_prepare($redirect, array(
+      'source' => $redirect_source . '/feed',
+      'redirect' => 'taxonomy/term/' . $terms['branch']->tid . '/feed',
+    ));
+    redirect_hash($redirect);
+    redirect_save($redirect);
+
     actions_do('term_merge_action', $terms['branch'], array(
       'term_trunk' => $terms['trunk']->tid,
       'redirect' => 301,
@@ -1094,6 +1116,11 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
 
     $terms['branch']->redirect = $terms['trunk'];
     $this->assertRedirectIntegration($terms, 'Redirects are made, if action is instructed to make ones.');
+
+    $this->drupalGet($redirect_source);
+    $this->assertUrl('taxonomy/term/' . $terms['trunk']->tid, array(), 'Redirect pointing to <em>taxonomy/term/[branch-tid]</em> now points to <em>taxonomy/term/[trunk-tid]</em>.');
+    $this->drupalGet($redirect_source . '/feed');
+    $this->assertUrl('taxonomy/term/' . $terms['trunk']->tid . '/feed', array(), 'Redirect pointing to <em>taxonomy/term/[branch-tid]/feed</em> now points to <em>taxonomy/term/[trunk-tid]/feed</em>.');
   }
 
   /**
@@ -1164,13 +1191,22 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
       if (isset($term->redirect)) {
         $sources = array('taxonomy/term/' . $term->tid);
         // Additionally checking path alias.
-        if (!in_array(drupal_get_path_alias('taxonomy/term/' . $term->tid), $sources)) {
-          $sources[] = drupal_get_path_alias('taxonomy/term/' . $term->tid);
+        if (!in_array(drupal_get_path_alias($sources[0]), $sources)) {
+          $sources[] = drupal_get_path_alias($sources[0]);
         }
-        $redirect = drupal_get_path_alias('taxonomy/term/' . $term->redirect->tid);
         foreach ($sources as $source) {
           $this->drupalGet($source);
-          $this->assertEqual($this->getUrl(), url($redirect, array('absolute' => TRUE)), $message);
+          $this->assertUrl('taxonomy/term/' . $term->redirect->tid, array(), $message);
+        }
+
+        // Additionally assert the 'taxonomy/term/*/feed' path.
+        $sources = array('taxonomy/term/' . $term->tid . '/feed');
+        if (!in_array(drupal_get_path_alias($sources[0]), $sources)) {
+          $sources[] = drupal_get_path_alias($sources[0]);
+        }
+        foreach ($sources as $source) {
+          $this->drupalGet($source);
+          $this->assertUrl('taxonomy/term/' . $term->redirect->tid . '/feed', array(), $message);
         }
       }
     }

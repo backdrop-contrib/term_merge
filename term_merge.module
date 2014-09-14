@@ -388,16 +388,32 @@ function term_merge_action($object, $context) {
   // hook_entity_delete() and will delete our just created redirects. But at the
   // same time we have to get the path alias of the $term_branch before it gets
   // deleted. Otherwise the path alias will be deleted along with the term
-  // itself.
+  // itself. Similarly would be lost all redirects pointing to branch term
+  // paths. We will redirect normal path to term and its RSS feed.
   $redirect_paths = array();
   if ($context['redirect'] != TERM_MERGE_NO_REDIRECT) {
-    // Creating HTTP redirect from term branch to the term trunk. We redirect
-    // standard taxonomy/term/% path and optionally, if path alias is set, we
-    // redirect from branch term path alias to the trunk term too.
-    $alias = drupal_get_path_alias('taxonomy/term/' . $term_branch->tid);
-    $redirect_paths[] = 'taxonomy/term/' . $term_branch->tid;
-    if (!in_array($alias, $redirect_paths)) {
-      $redirect_paths[] = $alias;
+    $redirect_paths['taxonomy/term/' . $term_trunk->tid] = array(
+      'taxonomy/term/' . $term_branch->tid,
+    );
+    $redirect_paths['taxonomy/term/' . $term_trunk->tid . '/feed'] = array(
+      'taxonomy/term/' . $term_branch->tid . '/feed',
+    );
+    foreach ($redirect_paths as $redirect_destination => $redirect_sources) {
+      // We create redirect from Drupal normal path, then we try to fetch its
+      // alias. Lastly we collect a set of redirects that point to either of the
+      // 2 former paths. Everything we were able to fetch will be redirecting to
+      // the trunk term.
+      $alias = drupal_get_path_alias($redirect_sources[0]);
+      if ($alias != $redirect_sources[0]) {
+        $redirect_sources[] = $alias;
+      }
+      $existing_redirects = array();
+      foreach ($redirect_sources as $redirect_source) {
+        foreach (redirect_load_multiple(array(), array('redirect' => $redirect_source)) as $v) {
+          $existing_redirects[] = $v->source;
+        }
+      }
+      $redirect_paths[$redirect_destination] = array_unique(array_merge($redirect_sources, $existing_redirects));
     }
   }
 
@@ -454,20 +470,24 @@ function term_merge_action($object, $context) {
     taxonomy_term_delete($term_branch->tid);
   }
 
-  // Here we do the 2nd part of integraiton with the Redirect module. Once the
+  // Here we do the 2nd part of integration with the Redirect module. Once the
   // branch term has been deleted (if deleted), we can add the redirects
   // without being afraid that the redirect module will delete them in its
   // hook_entity_delete().
-  foreach ($redirect_paths as $v) {
-    $redirect = new stdClass();
-    redirect_object_prepare($redirect, array(
-      'source' => $v,
-      'redirect' => 'taxonomy/term/' . $term_trunk->tid,
-      'status_code' => $context['redirect'],
-    ));
-    // avoid duplicate entry errors
-    redirect_hash($redirect);
-    if (!redirect_load_by_hash($redirect->hash)) {
+  foreach ($redirect_paths as $redirect_destination => $redirect_sources) {
+    foreach ($redirect_sources as $redirect_source) {
+      $redirect = redirect_load_by_source($redirect_source);
+      if (!$redirect) {
+        // Seems like redirect from such URI does not exist yet, we will create
+        // it.
+        $redirect = new stdClass();
+        redirect_object_prepare($redirect, array(
+          'source' => $redirect_source,
+        ));
+      }
+      $redirect->redirect = $redirect_destination;
+      $redirect->status_code = $context['redirect'];
+
       redirect_save($redirect);
     }
   }
@@ -517,10 +537,10 @@ function term_merge_action($object, $context) {
  */
 function term_merge($term_branch, $term_trunk, $merge_settings = array()) {
   // Older versions of this module had another interface of this function,
-  // as backword capability we still support the older interface, instead of
+  // as backward capability we still support the older interface, instead of
   // supplying a $merge_settings array, it was supplying all the settings as
   // additional function arguments.
-  // @todo: delete this backword capability at some point.
+  // @todo: delete this backward capability at some point.
   if (!is_array($merge_settings)) {
     $merge_settings = array(
       'term_branch_keep' => $merge_settings,

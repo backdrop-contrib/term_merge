@@ -297,35 +297,45 @@ function term_merge_action($object, $context) {
   }
 
   // Updating all the links to $term_branch to point now to $term_trunk
-  // firstly we go through the list of all fields searching for
-  // taxonomy_term_reference field type because potentially some of these fields
-  // values will have to be updated after merging terms.
-  $fields = field_info_field_map();
+  // firstly we go through the list of all fields searching for  fields that
+  // have foreign key at {taxonomy_term_data}.tid because potentially some of
+  // these fields values will have to be updated after merging terms.
+  $fields = field_info_fields();
   $result = array();
-  foreach ($fields as $field_name => $v) {
+  foreach ($fields as $field_name => $field_info) {
     // Additionally we group by field_name to know what field has to be updated
     // in each found entity.
     // @todo: Here would be nice to throw in a hook, allowing other modules to
     // supply meta data about their field types if they also use taxonomy
     // references, defining it in their own field types.
-    if ($v['type'] == 'taxonomy_term_reference') {
-      $result[$field_name] = array();
-      $query = new EntityFieldQuery();
-      // Making sure we search in the entire scope of entities.
-      $query->addMetaData('account', user_load(1));
-      $query->fieldCondition($field_name, 'tid', $term_branch->tid);
-      $_result = $query->execute();
-      $result[$field_name] = array_merge_recursive($result[$field_name], $_result);
+
+    foreach ($field_info['foreign keys'] as $foreign_key) {
+      if ($foreign_key['table'] == 'taxonomy_term_data') {
+        $column = array_search('tid', $foreign_key['columns']);
+        if ($column) {
+          $result[$field_name] = array();
+          $query = new EntityFieldQuery();
+          // Making sure we search in the entire scope of entities.
+          $query->addMetaData('account', user_load(1));
+
+          $query->fieldCondition($field_name, $column, $term_branch->tid);
+          $_result = $query->execute();
+          // Add entities.
+          $result[$field_name]['entities'] = array_merge_recursive($result[$field_name], $_result);
+          // Add column.
+          $result[$field_name]['column'] = $column;
+        }
+      }
     }
   }
-  // Now we load all entities that have taxonomy_term_reference pointing to
-  // $term_branch.
-  foreach ($result as $field_name => $entity_types) {
-    foreach ($entity_types as $entity_type => $v) {
+
+  // Now we load all entities that have fields pointing to $term_branch.
+  foreach ($result as $field_name => $field_data) {
+    $column = $field_data['column'];
+    foreach ($field_data['entities'] as $entity_type => $v) {
       $ids = array_keys($v);
       $entities = entity_load($entity_type, $ids);
-      // After we have loaded it, we alter the taxonomy_term_reference
-      // to point to $term_trunk.
+      // After we have loaded it, we alter the field to point to $term_trunk.
       foreach ($entities as $entity) {
         // What is more, we have to do it for every available language.
         foreach ($entity->$field_name as $language => $items) {
@@ -334,7 +344,7 @@ function term_merge_action($object, $context) {
           // 'keep_only_unique'.
           $is_trunk_added = FALSE;
           foreach ($entity->{$field_name}[$language] as $delta => $item) {
-            if ($context['keep_only_unique'] && $is_trunk_added && in_array($item['tid'], array($term_trunk->tid, $term_branch->tid))) {
+            if ($context['keep_only_unique'] && $is_trunk_added && in_array($item[$column], array($term_trunk->tid, $term_branch->tid))) {
               // We are instructed to keep only unique references and we already
               // have term trunk in this field, so we just unset value for this
               // delta.
@@ -343,14 +353,14 @@ function term_merge_action($object, $context) {
             else {
               // Merging term references if necessary, and keep an eye on
               // whether we already have term trunk among this field values.
-              switch ($item['tid']) {
+              switch ($item[$column]) {
                 case $term_trunk->tid:
                   $is_trunk_added = TRUE;
                   break;
 
                 case $term_branch->tid:
                   $is_trunk_added = TRUE;
-                  $entity->{$field_name}[$language][$delta]['tid'] = $term_trunk->tid;
+                  $entity->{$field_name}[$language][$delta][$column] = $term_trunk->tid;
                   break;
               }
             }

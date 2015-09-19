@@ -1078,9 +1078,9 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
       'redirect' => TERM_MERGE_NO_REDIRECT,
     ), 'Submit');
     $this->drupalPost(NULL, array(), 'Confirm');
-    $this->assertRedirectIntegration($terms, 'No redirections made after running merge batch when not instructed to make redirections.');
+    $this->assertRedirectIntegration($terms, 'No redirection made after running merge batch when not instructed to make redirection.');
 
-    // Trying to merge into an existing term with redirection.
+    // Trying to merge into a term with redirection.
     $this->drupalPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
       'term_branch[]' => array($terms['branch']->tid),
       'term_trunk[widget]' => 'select',
@@ -1089,27 +1089,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
     ), 'Submit');
     $terms['branch']->redirect = $terms['trunk'];
     $this->drupalPost(NULL, array(), 'Confirm');
-    $this->assertRedirectIntegration($terms, 'Redirection is made after running merge batch merging into an existing term, when instructed to make redirections.');
-
-    // Trying to merge into a new term with redirection.
-    $terms = $this->createTerms(array('branch'));
-    $this->drupalPostAJAX('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
-      'term_branch[]' => array($terms['branch']->tid),
-      'term_trunk[widget]' => 'select',
-      'term_trunk[tid]' => TERM_MERGE_NEW_TERM_TRUNK,
-    ), 'term_trunk[tid]');
-
-    $this->drupalPost(NULL, array(
-      'term_branch[]' => array($terms['branch']->tid),
-      'term_trunk[widget]' => 'select',
-      'term_trunk[tid]' => TERM_MERGE_NEW_TERM_TRUNK,
-      'name' => $this->randomName(),
-      'redirect' => 0,
-    ), 'Submit');
-    $this->drupalPost(NULL, array(), 'Confirm');
-    $terms['trunk'] = $this->getLastTerm($this->vocabulary);
-    $terms['branch']->redirect = $terms['trunk'];
-    $this->assertRedirectIntegration($terms, 'Redirection is made after running merge batch merging into a new term, when instructed to make redirections.');
+    $this->assertRedirectIntegration($terms, 'Redirection is made after running merge batch merging into an existing term, when instructed to make redirection.');
   }
 
   /**
@@ -1265,7 +1245,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->drupalPost(NULL, array(), 'Confirm');
     $this->assertSynonymsIntegration($terms, 'No synonyms are added after running merge batch when not instructed to add synonyms.');
 
-    // Trying to merge into an existing term with synonyms adding.
+    // Trying to merge into a term with synonyms adding.
     $this->drupalPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
       'term_branch[]' => array($terms['branch']->tid),
       'term_trunk[widget]' => 'select',
@@ -1276,28 +1256,6 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
     $terms['trunk']->synonyms = array($terms['branch']->name);
     $this->drupalPost(NULL, array(), 'Confirm');
     $this->assertSynonymsIntegration($terms, 'Synonyms are added after running merge batch merging into an existing term, when instructed to add synonyms.');
-
-    // Trying to merge into a new term with synonyms adding.
-    $terms = $this->createTerms(array('branch'));
-    $this->drupalPostAJAX('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
-      'term_branch[]' => array($terms['branch']->tid),
-      'term_trunk[widget]' => 'select',
-      'term_branch_keep' => TRUE,
-      'term_trunk[tid]' => TERM_MERGE_NEW_TERM_TRUNK,
-    ), 'term_trunk[tid]');
-
-    $this->drupalPost(NULL, array(
-      'term_branch[]' => array($terms['branch']->tid),
-      'term_trunk[widget]' => 'select',
-      'term_trunk[tid]' => TERM_MERGE_NEW_TERM_TRUNK,
-      'term_branch_keep' => TRUE,
-      'name' => $this->randomName(),
-      'synonyms[' . SYNONYMS_DEFAULT_FIELD_NAME . ']' => TRUE,
-    ), 'Submit');
-    $this->drupalPost(NULL, array(), 'Confirm');
-    $terms['trunk'] = $this->getLastTerm($this->vocabulary);
-    $terms['trunk']->synonyms = array($terms['branch']->name);
-    $this->assertSynonymsIntegration($terms, 'Synonyms are added after running merge batch merging into a new term, when instructed to add synonyms.');
   }
 
   /**

@@ -89,7 +89,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * GetInfo method.
    */
-  public function getInfo() {
+  public static function getInfo() {
     return array(
       'name' => 'Term Merge',
       'description' => 'Ensure that the module Term Merge works correctly.',
@@ -841,7 +841,7 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * GetInfo method.
    */
-  public function getInfo() {
+  public static function getInfo() {
     return array(
       'name' => 'Duplicate terms merge',
       'description' => 'Ensure that the feature <i>merge duplicate terms</i> of module Term Merge works correctly.',
@@ -1020,8 +1020,10 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * SetUp method.
    */
-  public function setUp() {
-    parent::setUp(array('redirect', 'path'));
+  public function setUp(array $modules = array()) {
+    $modules[] = 'redirect';
+    $modules[] = 'path';
+    parent::setUp($modules);
 
     $this->superAdmin = $this->drupalCreateUser(array(
       'administer taxonomy',
@@ -1036,7 +1038,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * GetInfo method.
    */
-  public function getInfo() {
+  public static function getInfo() {
     return array(
       'name' => 'Redirect module integration',
       'description' => 'Ensure that the module Term Merge integrates with ' . l('Redirect', 'http://drupal.org/project/redirect') . '/Path modules correctly.',
@@ -1248,8 +1250,9 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * SetUp method.
    */
-  public function setUp() {
-    parent::setUp(array('synonyms'));
+  public function setUp(array $modules = array()) {
+    $modules[] = 'synonyms';
+    parent::setUp($modules);
     // Additionally we enable default synonyms field in the vocabulary.
     $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/edit', array(
       'synonyms[synonyms][' . SYNONYMS_DEFAULT_FIELD_NAME . ']' => TRUE,
@@ -1259,7 +1262,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * GetInfo method.
    */
-  public function getInfo() {
+  public static function getInfo() {
     return array(
       'name' => 'Synonyms module integration',
       'description' => 'Ensure that the module Term Merge integrates with ' . l('Synonyms', 'http://drupal.org/project/synonyms') . ' module correctly.',
@@ -1435,8 +1438,9 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * SetUp method.
    */
-  public function setUp() {
-    parent::setUp(array('views'));
+  public function setUp(array $modules = array()) {
+    $modules[] = 'views';
+    parent::setUp($modules);
     // Additionally we create a view.
     $view = views_new_view();
     $view->name = 'term_merge_view_test';
@@ -1456,7 +1460,7 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * GetInfo method.
    */
-  public function getInfo() {
+  public static function getInfo() {
     return array(
       'name' => 'Views module integration',
       'description' => 'Ensure that the module Term Merge integrates with ' . l('Views', 'http://drupal.org/project/views') . ' module correctly.',

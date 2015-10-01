@@ -371,6 +371,16 @@ function term_merge_action($object, $context) {
           // numbers, because it is what it is supposed to be.
           $entity->{$field_name}[$language] = array_values($entity->{$field_name}[$language]);
         }
+
+        // Integration with workbench_moderation module. Without this code, if
+        // we save the node for which workbench moderation is enabled, then
+        // it will go from "published" state into "draft". Though in fact we do
+        // not change anything in the node and therefore it should persist in
+        // published state.
+        if (module_exists('workbench_moderation') && $entity_type == 'node') {
+          $entity->workbench_moderation['updating_live_revision'] = TRUE;
+        }
+
         // After updating all the references, save the entity.
         entity_save($entity_type, $entity);
       }

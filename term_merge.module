@@ -15,16 +15,6 @@
 define('TERM_MERGE_NO_REDIRECT', -1);
 
 /**
- * Constant to use in term merge action.
- *
- * Constant denotes "Create a new term and use it as the term trunk" logic
- * for term merge action.
- *
- * @var int
- */
-define('TERM_MERGE_NEW_TERM_TRUNK', -1);
-
-/**
  * Implements hook_menu().
  */
 function term_merge_menu() {

@@ -608,13 +608,26 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
         'parents' => implode(' &raquo; ', $parents),
       );
 
-      $wrapper = entity_metadata_wrapper('taxonomy_term', $term);
-      foreach ($form['settings']['fields']['#default_value'] as $instance) {
-        $options[$term->tid][$instance] = $wrapper->{$instance}->value(array('sanitize' => TRUE));
-        if (is_array($options[$term->tid][$instance])) {
-          $options[$term->tid][$instance] = theme('item_list', array(
-            'items' => array_map('filter_xss', $options[$term->tid][$instance]),
-          ));
+      if (isset($form['settings']['fields'])) {
+        foreach ($form['settings']['fields']['#default_value'] as $instance) {
+          $field = field_info_field($instance);
+          $items = field_get_items('taxonomy_term', $term, $field['field_name']);
+          $options[$term->tid][$field['field_name']] = '';
+          if (is_array($items)) {
+            $options[$term->tid][$field['field_name']] = array(
+              '#theme' => 'item_list',
+              '#items' => array(),
+            );
+            foreach ($items as $item) {
+              $options[$term->tid][$field['field_name']]['#items'][] = drupal_render(field_view_value('taxonomy_term', $term, $field['field_name'], $item));
+            }
+            if (count($options[$term->tid][$field['field_name']]['#items']) > 1) {
+              $options[$term->tid][$field['field_name']] = drupal_render($options[$term->tid][$field['field_name']]);
+            }
+            else {
+              $options[$term->tid][$field['field_name']] = $options[$term->tid][$field['field_name']]['#items'][0];
+            }
+          }
         }
       }
     }
@@ -634,7 +647,10 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
       'language' => t('Language'),
       'parents' => t('Parents'),
     );
-    $header += array_intersect_key($form['settings']['fields']['#options'], drupal_map_assoc($form['settings']['fields']['#default_value']));
+
+    if (isset($form['settings']['fields'])) {
+      $header += array_map('check_plain', array_intersect_key($form['settings']['fields']['#options'], drupal_map_assoc($form['settings']['fields']['#default_value'])));
+    }
 
     $form['wrapper']['group'][$i]['duplicates'] = array(
       '#type' => 'tableselect',

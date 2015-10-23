@@ -1164,15 +1164,37 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
 class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
 
   /**
+   * Field definition array within which the testing will happen.
+   *
+   * @var array
+   */
+  protected $field = array(
+    'field_name' => 'term_merge_synonyms_test',
+    'type' => 'text',
+  );
+
+  /**
    * SetUp method.
    */
   public function setUp(array $modules = array()) {
     $modules[] = 'synonyms';
     parent::setUp($modules);
     // Additionally we enable default synonyms field in the vocabulary.
-    $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/edit', array(
-      'synonyms[synonyms][' . SYNONYMS_DEFAULT_FIELD_NAME . ']' => TRUE,
-    ), 'Save');
+    $this->field = field_create_field($this->field);
+    $instance = array(
+      'field_name' => $this->field['field_name'],
+      'label' => 'Testing term merge synonyms integration',
+      'entity_type' => 'taxonomy_term',
+      'bundle' => $this->vocabulary->machine_name,
+      'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    );
+    $instance = field_create_instance($instance);
+    $instance = field_info_instance($instance['entity_type'], $instance['field_name'], $instance['bundle']);
+    synonyms_behavior_settings_save(array(
+      'instance_id' => $instance['id'],
+      'behavior' => 'synonyms',
+      'settings' => array(),
+    ));
   }
 
   /**
@@ -1222,7 +1244,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
     // Testing adding as a synonym.
     actions_do('term_merge_action', $terms['branch'], array(
       'term_trunk' => $terms['trunk']->tid,
-      'synonyms' => array(SYNONYMS_DEFAULT_FIELD_NAME),
+      'synonyms' => array($this->field['field_name']),
     ));
 
     $terms['trunk']->synonyms = array($terms['branch']->name);
@@ -1240,7 +1262,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
       'term_trunk[widget]' => 'select',
       'term_trunk[tid]' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
-      'synonyms[' . SYNONYMS_DEFAULT_FIELD_NAME . ']' => FALSE,
+      'synonyms[' . $this->field['field_name'] . ']' => FALSE,
     ), 'Submit');
     $this->drupalPost(NULL, array(), 'Confirm');
     $this->assertSynonymsIntegration($terms, 'No synonyms are added after running merge batch when not instructed to add synonyms.');
@@ -1251,7 +1273,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
       'term_trunk[widget]' => 'select',
       'term_trunk[tid]' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
-      'synonyms[' . SYNONYMS_DEFAULT_FIELD_NAME . ']' => TRUE,
+      'synonyms[' . $this->field['field_name'] . ']' => TRUE,
     ), 'Submit');
     $terms['trunk']->synonyms = array($terms['branch']->name);
     $this->drupalPost(NULL, array(), 'Confirm');
@@ -1275,10 +1297,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
     drupal_static_reset();
     foreach ($terms as $term) {
       // Getting an array of synonyms according to Synonyms module.
-      $synonyms = array();
-      foreach (synonyms_get_term_synonyms(taxonomy_term_load($term->tid)) as $tmp) {
-        $synonyms[] = $tmp['value'];
-      }
+      $synonyms = synonyms_get_raw(taxonomy_term_load($term->tid));
 
       $expected_synonyms = isset($term->synonyms) ? $term->synonyms : array();
       // Comparing $synonyms to $expected_synonyms.
@@ -1414,7 +1433,8 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->view->set_display('default');
 
     // We use Field API info to look up necessary tables and columns.
-    $table = reset(array_keys($field['storage']['details']['sql']['FIELD_LOAD_CURRENT']));
+    $table = array_keys($field['storage']['details']['sql']['FIELD_LOAD_CURRENT']);
+    $table = reset($table);
     $columns = $field['storage']['details']['sql']['FIELD_LOAD_CURRENT'][$table];
 
     $this->view->display_handler->display->display_options['filters'][$columns['tid']]['id'] = $columns['tid'];

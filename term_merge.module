@@ -629,6 +629,7 @@ function term_merge_merge_options_elements($vocabulary) {
     '#type' => 'checkbox',
     '#title' => t('Keep only unique terms after merging'),
     '#description' => t('Sometimes after merging you may end up having a node (or any other entity) pointing twice to the same taxonomy term, tick this checkbox if want to keep only unique terms in other entities after merging.'),
+    '#default_value' => TRUE,
   );
 
   if (module_exists('redirect')) {

@@ -1464,3 +1464,104 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->assertTrue(count($filter) == 1 && in_array($terms['trunk']->tid, array_keys($filter)), 'Views term reference filter gets updated to filter on trunk term instead of filtering on branch term if the branch term is instructed to be deleted during merging of terms.');
   }
 }
+
+/**
+ * Test integration with Entity Reference module.
+ */
+class EntityReferenceTermMergeWebTestCase extends TermMergeWebTestCase {
+
+  /**
+   * Content type used for testing the entity reference field integration.
+   *
+   * @var string
+   */
+  protected $content_type = 'term_merge_entity_reference';
+
+  /**
+   * Field definition array used for entity reference integration testing.
+   *
+   * @var array
+   */
+  protected $field = array(
+    'type' => 'entityreference',
+    'field_name' => 'term_merge_entity_reference',
+    'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    'settings' => array(
+      'target_type' => 'taxonomy_term',
+      'handler' => 'base',
+      'handler_settings' => array(),
+    ),
+  );
+
+  /**
+   * Instance definition array used for entity reference integration testing.
+   *
+   * @var array
+   */
+  protected $instance = array();
+
+  /**
+   * GetInfo method.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Term Merge Entity Reference',
+      'description' => 'Ensure that the module Term Merge integrates with Entity Reference field type correctly.',
+      'group' => 'Term Merge',
+    );
+  }
+
+  public function setUp(array $modules = array()) {
+    $modules[] = 'entityreference';
+    parent::setUp($modules);
+
+    $this->drupalPost('admin/structure/types/add', array(
+      'name' => $this->randomName(),
+      'type' => $this->content_type,
+    ), 'Save content type');
+
+    $this->field = field_create_field($this->field);
+    $this->instance['field_name'] = $this->field['field_name'];
+    $this->instance['entity_type'] = 'node';
+    $this->instance['bundle'] = $this->content_type;
+    $this->instance['label'] = $this->randomName();
+    $this->instance = field_create_instance($this->instance);
+    $this->instance = field_info_instance($this->instance['entity_type'], $this->instance['field_name'], $this->instance['bundle']);
+  }
+
+  /**
+   * Verify that entity reference field values get update upon term merging.
+   */
+  public function testEntityReferenceField() {
+    $terms = array(
+      'trunk' => NULL,
+      'branch' => NULL,
+    );
+    $nodes = array();
+    foreach ($terms as $type => $v) {
+      $terms[$type] = (object) array(
+        'vid' => $this->vocabulary->vid,
+        'name' => $this->randomName(),
+      );
+      taxonomy_term_save($terms[$type]);
+      $nodes[$type] = (object) array(
+        'type' => $this->content_type,
+        'title' => $this->randomName(),
+        $this->field['field_name'] => array(LANGUAGE_NONE => array(
+          array('target_id' => $terms[$type]->tid),
+        )),
+      );
+      node_save($nodes[$type]);
+    }
+
+    actions_do('term_merge_action', $terms['branch'], array(
+      'term_trunk' => $terms['trunk']->tid,
+      'term_branch_keep' => FALSE,
+    ));
+
+    foreach ($nodes as $type => $node) {
+      $node = entity_load_unchanged('node', $node->nid);
+      $this->assertEqual($terms['trunk']->tid, $node->{$this->field['field_name']}[LANGUAGE_NONE][0]['target_id'], $type . ' node points to trunk term in the entity reference field after merging the terms.');
+    }
+  }
+}

@@ -619,7 +619,23 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
               '#items' => array(),
             );
             foreach ($items as $item) {
-              $options[$term->tid][$field['field_name']]['#items'][] = drupal_render(field_view_value('taxonomy_term', $term, $field['field_name'], $item));
+              switch ($field['type']) {
+                case 'image':
+                  $display = array();
+                  $image_style = image_style_load('thumbnail');
+                  if ($image_style) {
+                    $cache = _field_info_field_cache();
+                    $display = $cache->prepareInstanceDisplay($display, $field['type']);
+                    $display['settings']['image_style'] = $image_style['name'];
+                  }
+                  $rendered_item = drupal_render(field_view_value('taxonomy_term', $term, $field['field_name'], $item, $display));
+                  break;
+
+                default:
+                  $rendered_item = drupal_render(field_view_value('taxonomy_term', $term, $field['field_name'], $item));
+                  break;
+              }
+              $options[$term->tid][$field['field_name']]['#items'][] = $rendered_item;
             }
             if (count($options[$term->tid][$field['field_name']]['#items']) > 1) {
               $options[$term->tid][$field['field_name']] = drupal_render($options[$term->tid][$field['field_name']]);

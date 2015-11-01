@@ -319,7 +319,14 @@ function term_merge_action($object, $context) {
         if (!isset($term_branch->{$field_name}[$language])) {
           $term_branch->{$field_name}[$language] = array();
         }
-        $term_trunk->{$field_name}[$language] = array_merge($term_trunk->{$field_name}[$language], $term_branch->{$field_name}[$language]);
+        $items = array_merge($term_trunk->{$field_name}[$language], $term_branch->{$field_name}[$language]);
+        $unique_items = array();
+        foreach ($items as $item) {
+          $unique_items[serialize($item)] = $item;
+        }
+        $items = array_values($unique_items);
+
+        $term_trunk->{$field_name}[$language] = $items;
       }
     }
 
@@ -654,7 +661,7 @@ function term_merge_merge_options_elements($vocabulary) {
     $form['merge_fields'] = array(
       '#type' => 'checkboxes',
       '#title' => t('Merge Term Fields'),
-      '#description' => t('Check the fields whose values from branch terms you want to add to the values of corresponding fields of the trunk term. <b>Important note:</b> the values will be added until the cardinality limit for the selected fields is reached.'),
+      '#description' => t('Check the fields whose values from branch terms you want to add to the values of corresponding fields of the trunk term. <b>Important note:</b> the values will be added until the cardinality limit for the selected fields is reached and only unique values for each field will be saved.'),
       '#options' => $options,
     );
   }

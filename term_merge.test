@@ -176,6 +176,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
       'term_merge_test_single' => 1,
       'term_merge_test_unlimited' => FIELD_CARDINALITY_UNLIMITED,
       'term_merge_do_not_merge' => 10,
+      'term_merge_not_unique' => FIELD_CARDINALITY_UNLIMITED,
     );
 
     foreach ($fields_map as $field_name => $cardinality) {
@@ -191,8 +192,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         'field_name' => $field_name,
         'entity_type' => 'taxonomy_term',
         'bundle' => $bundle,
-        'label' => $this->randomName(),
-        'description' => $this->randomName(),
+        'label' => $field_name,
       ));
     }
 
@@ -202,31 +202,32 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     );
 
     foreach ($terms as $term_type => $tmp) {
-      $url = 'admin/structure/taxonomy/vocabulary/add';
-      $name = $this->randomName();
-      $edit = array(
-        'name' => $name,
+      $term = (object) array(
+        'vid' => $this->vocabulary->vid,
+        'name' => $this->randomName(),
       );
 
       foreach ($fields_map as $field_name => $cardinality) {
         switch ($field_name) {
           case 'term_merge_test_single':
-            $edit[$field_name . '[' . LANGUAGE_NONE . '][0][value]'] = $this->randomName();
+            $term->{$field_name}[LANGUAGE_NONE][0]['value'] = $this->randomName();
             break;
 
           case 'term_merge_test_unlimited':
           case 'term_merge_do_not_merge':
             $count = rand(1, 3);
             for ($i = 0; $i < $count; $i++) {
-              $edit[$field_name . '[' . LANGUAGE_NONE . '][' . $i . '][value]'] = $this->randomName();
-              $this->drupalPost($url, $edit, 'Add another item');
-              $url = NULL;
+              $term->{$field_name}[LANGUAGE_NONE][$i]['value'] = $this->randomName();
             }
+            break;
+
+          case 'term_merge_not_unique':
+            $term->{$field_name}[LANGUAGE_NONE][0]['value'] = 'term_merge_not_unique_value';
             break;
         }
       }
 
-      $this->drupalPost($url, $edit, 'Save');
+      taxonomy_term_save($term);
       $terms[$term_type] = $this->getLastTerm($this->vocabulary);
     }
 
@@ -241,15 +242,23 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->drupalGet('taxonomy/term/' . $terms['trunk']->tid);
     foreach ($fields_map as $field_name => $cardinality) {
       foreach (field_get_items('taxonomy_term', $terms['branch'], $field_name) as $item) {
-        $this->assertNoText($item['value'], 'Values of field ' . $field_name . ' have not been added to the trunk term with disabled "merge_fields" option.');
+        if ($field_name != 'term_merge_not_unique') {
+          $this->assertNoText($item['value'], 'Values of field ' . $field_name . ' have not been added to the trunk term with disabled "merge_fields" option.');
+        }
       }
     }
 
-    // Now we try merging with merging 2 of 3 fields. The values of the branch
-    // term should be added to the trunk term's values only in those 2 fields.
+    // Now we try merging with merging fields. The values of the branch term
+    // should be added to the trunk term's values only in where we asked them
+    // to be added. Moreover, only unique values are to be kept in each of the
+    // merged fields.
     actions_do('term_merge_action', $terms['branch'], array(
       'term_trunk' => $terms['trunk']->tid,
-      'merge_fields' => array('term_merge_test_single', 'term_merge_test_unlimited'),
+      'merge_fields' => array(
+        'term_merge_test_single',
+        'term_merge_test_unlimited',
+        'term_merge_not_unique',
+      ),
       'term_branch_keep' => TRUE,
     ));
 
@@ -264,6 +273,13 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           // added.
           foreach (field_get_items('taxonomy_term', $terms['branch'], $field_name) as $item) {
             $this->assertNoText($item['value'], 'Values of field ' . $field_name . ' (cardinality ' . $cardinality . ') have not been added to the trunk term with enabled "merge_fields" option.');
+          }
+          break;
+
+        case 'term_merge_not_unique':
+          // Make sure only the unique values in merged field are kept.
+          foreach (field_get_items('taxonomy_term', $terms['trunk'], $field_name) as $item) {
+            $this->assertUniqueText($item['value'], 'Only unique field values are kept in the trunk term field after merging terms with enabled "merge_fields" option.');
           }
           break;
 

@@ -328,37 +328,17 @@ function term_merge_action($object, $context) {
     taxonomy_term_save($term_trunk);
   }
 
-  // Updating all the links to $term_branch to point now to $term_trunk
-  // firstly we go through the list of all fields searching for  fields that
-  // have foreign key at {taxonomy_term_data}.tid because potentially some of
-  // these fields values will have to be updated after merging terms.
-  $fields = field_info_fields();
   $result = array();
-  foreach ($fields as $field_name => $field_info) {
-    // Additionally we group by field_name to know what field has to be updated
-    // in each found entity.
-    // @todo: Here would be nice to throw in a hook, allowing other modules to
-    // supply meta data about their field types if they also use taxonomy
-    // references, defining it in their own field types.
+  foreach (term_merge_fields_with_foreign_key('taxonomy_term_data', 'tid') as $field) {
+    $result[$field['field_name']] = array();
+    $query = new EntityFieldQuery();
+    // Making sure we search in the entire scope of entities.
+    $query->addMetaData('account', user_load(1));
 
-    foreach ($field_info['foreign keys'] as $foreign_key) {
-      if ($foreign_key['table'] == 'taxonomy_term_data') {
-        $column = array_search('tid', $foreign_key['columns']);
-        if ($column) {
-          $result[$field_name] = array();
-          $query = new EntityFieldQuery();
-          // Making sure we search in the entire scope of entities.
-          $query->addMetaData('account', user_load(1));
-
-          $query->fieldCondition($field_name, $column, $term_branch->tid);
-          $_result = $query->execute();
-          // Add entities.
-          $result[$field_name]['entities'] = array_merge_recursive($result[$field_name], $_result);
-          // Add column.
-          $result[$field_name]['column'] = $column;
-        }
-      }
-    }
+    $query->fieldCondition($field['field_name'], $field['term_merge_field_column'], $term_branch->tid);
+    $_result = $query->execute();
+    $result[$field['field_name']]['entities'] = $_result;
+    $result[$field['field_name']]['column'] = $field['term_merge_field_column'];
   }
 
   // Now we load all entities that have fields pointing to $term_branch.
@@ -773,4 +753,37 @@ function term_merge_merge_options_submit($merge_settings_element, &$form_state, 
     'step' => (int) $merge_settings_element['step']['#value'],
   );
   return $merge_settings;
+}
+
+/**
+ * Fetch all fields that have a foreign key to provided column.
+ *
+ * @param string $foreign_table
+ *   Name of the table for which to look among foreign keys of all the fields
+ * @param string $foreign_column
+ *   Name of the column for which to look among foreign keys of all the fields
+ *
+ * @return array
+ *   Array of all fields that have the specified table and column within their
+ *   foreign keys. Each of the fields array will be extended to include the
+ *   following additional keys:
+ *   - term_merge_field_column: (string) Name of the field column that holds
+ *     foreign key to the provided table and column
+ */
+function term_merge_fields_with_foreign_key($foreign_table, $foreign_column) {
+  $fields = field_info_fields();
+  $result = array();
+  foreach ($fields as $field_name => $field_info) {
+    foreach ($field_info['foreign keys'] as $foreign_key) {
+      if ($foreign_key['table'] == $foreign_table) {
+        $column = array_search($foreign_column, $foreign_key['columns']);
+        if ($column) {
+          $field_info['term_merge_field_column'] = $column;
+          $result[] = $field_info;
+        }
+      }
+    }
+  }
+
+  return $result;
 }

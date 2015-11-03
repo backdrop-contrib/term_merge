@@ -583,16 +583,40 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
 
   $groups = array_filter($groups, 'term_merge_duplicates_form_filter');
 
+  $tids = array();
+  foreach ($groups as $group) {
+    $tids = array_merge($tids, array_keys($group));
+  }
+
+  // This array will be keyed by term tid and values will be counts of how many
+  // other entities reference to this term through values of fields attached to
+  // them.
+  $terms_count = array_fill_keys($tids, 0);
+  if (!empty($tids)) {
+    foreach (term_merge_fields_with_foreign_key('taxonomy_term_data', 'tid') as $referencing_field) {
+      if ($referencing_field['storage']['type'] == 'field_sql_storage') {
+        $table = array_keys($referencing_field['storage']['details']['sql'][FIELD_LOAD_CURRENT]);
+        $table = reset($table);
+        $column = $referencing_field['storage']['details']['sql'][FIELD_LOAD_CURRENT][$table][$referencing_field['term_merge_field_column']];
+        $select = db_select($table, 'reference')
+          ->condition($column, $tids);
+        $select->addField('reference', $column, 'tid');
+        $select->addExpression('COUNT(1)', 'count');
+        $select->groupBy($column);
+        $select = $select->execute();
+        foreach ($select as $row) {
+          $terms_count[$row->tid] += $row->count;
+        }
+      }
+    }
+  }
+
   if (!empty($form['settings']['fields']['#default_value'])) {
     // We need to load full term entities, because we are requested to show
     // fields.
-    $tids = array();
-    foreach ($groups as $group) {
-      $tids = array_merge($tids, array_keys($group));
-    }
-    $tids = taxonomy_term_load_multiple($tids);
+    $terms = taxonomy_term_load_multiple($tids);
     foreach ($groups as $i => $group) {
-      $groups[$i] = array_intersect_key($tids, $group);
+      $groups[$i] = array_intersect_key($terms, $group);
     }
   }
 
@@ -624,6 +648,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
         'language' => $language,
         'description' => check_markup($term->description, $term->format),
         'parents' => implode(' &raquo; ', $parents),
+        'count' => format_plural($terms_count[$term->tid], '@count time', '@count times'),
       );
 
       if (isset($form['settings']['fields'])) {
@@ -680,6 +705,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
       'description' => t('Description'),
       'language' => t('Language'),
       'parents' => t('Parents'),
+      'count' => t('Referenced'),
     );
 
     if (isset($form['settings']['fields'])) {

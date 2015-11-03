@@ -140,6 +140,38 @@ function term_merge_help($path, $arg) {
 }
 
 /**
+ * Implements hook_ctools_plugin_type().
+ */
+function term_merge_ctools_plugin_type() {
+  $plugins = array();
+
+  $plugins['duplicate_suggestion'] = array(
+    'defaults' => array(
+      'title' => NULL,
+      'description' => NULL,
+      'hash callback' => NULL,
+      'weight' => 0,
+    ),
+  );
+
+  return $plugins;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function term_merge_ctools_plugin_directory($owner, $plugin_type) {
+  switch ($owner) {
+    case 'term_merge':
+      switch ($plugin_type) {
+        case 'duplicate_suggestion':
+          return 'plugins/' . $plugin_type;
+      }
+      break;
+  }
+}
+
+/**
  * Access callback for term merge action.
  *
  * Decide whether to grant access to an account for an operation of merging
@@ -578,6 +610,28 @@ function term_merge($term_branch, $term_trunk, $merge_settings = array()) {
 
   // Initialize the batch process.
   batch_set($batch);
+}
+
+/**
+ * Retrieve information about ctools plugin of type 'duplicate suggestion'.
+ *
+ * @param string $id
+ *   Supply here ID of the cTool plugin information about which you want to
+ *   retrieve. You may omit this argument and then information on all duplicate
+ *   suggestion plugins will be returned
+ *
+ * @return array
+ *   Array of information on all available duplicate suggestion plugins or if
+ *   $id was provided, then information on that plugin
+ */
+function term_merge_duplicate_suggestion($id = NULL) {
+  ctools_include('plugins');
+  $plugins = ctools_get_plugins('term_merge', 'duplicate_suggestion', $id);
+  if (!$id) {
+    // Sort the list of plugins by their weight.
+    uasort($plugins, 'drupal_sort_weight');
+  }
+  return $plugins;
 }
 
 /**

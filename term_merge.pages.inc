@@ -494,7 +494,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
   }
   $form['settings']['duplicate_suggestion'] = array(
     '#type' => 'checkboxes',
-    '#title' => t('Mark terms as duplicate if all of the checked conditions stand true'),
+    '#title' => t('Mark terms as duplicate if all the checked conditions stand true'),
     '#options' => $options,
     '#default_value' => isset($form_state['values']['settings']['duplicate_suggestion']) ? $form_state['values']['settings']['duplicate_suggestion'] : array('name'),
   );

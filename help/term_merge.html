@@ -5,7 +5,7 @@ When using taxonomy for free tagging purposes, it's easy to end up with several 
 You, as an administrator, may then want to correct such errors or unify synonymous terms, thereby pruning the taxonomy to a more manageable set. This module allows you to merge multiple terms into one, while updating all fields referring to those terms to refer to the replacement term instead.
 
 Currently the module features the following set of functionality and useful tools:
-<dt>Updating taxonomy term references from branch terms to point to the trunk term.</dt>
+<dt>Updating all references to branch terms and changing them to the trunk term.</dt>
 <dd>The core feature of the module is to safely update all existing content and to make it point from a branch term to the trunk one. Right now the following Field types are supported: <ul>
     <li>Taxonomy term reference</li>
     <li>Entity reference (when the underlying entity type is Taxonomy term)</li>
@@ -41,4 +41,4 @@ And then through the UI of the duplicate tool you can enable a combination of th
 
 <h3>How to judge if suggestion duplicates are actually duplicates?</h3>
 
-One way or another, but you will have your duplicates laid out in front of you. You certainly can merge all of them without extra worrying about it. But chances are, at least some of the suggested terms may actually not be duplicates. So might want to quickly scan through the available suggestions and review them for any obvious false positives. You can use term name, term ID, description, parents and fields of those terms to tell the heads and tails in it.
+One way or another, but you will have your duplicates laid out in front of you. You certainly can merge all of them without extra worrying about it. But chances are, at least some of the suggested terms may actually not be duplicates. So you might want to quickly scan through the available suggestions and review them for any obvious false positives. You can use term name, term ID, description, parents and fields of those terms to tell the heads and tails in it.

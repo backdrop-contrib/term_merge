@@ -489,6 +489,17 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
   );
 
   $options = array();
+  foreach (term_merge_duplicate_suggestion() as $plugin) {
+    $options[$plugin['name']] = $plugin['title'];
+  }
+  $form['settings']['duplicate_suggestion'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Mark terms as duplicate if all of the checked conditions stand true'),
+    '#options' => $options,
+    '#default_value' => isset($form_state['values']['settings']['duplicate_suggestion']) ? $form_state['values']['settings']['duplicate_suggestion'] : array('name'),
+  );
+
+  $options = array();
   $bundle = field_extract_bundle('taxonomy_term', $vocabulary);
   foreach (field_info_instances('taxonomy_term', $bundle) as $instance) {
     $options[$instance['field_name']] = $instance['label'];
@@ -527,20 +538,27 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
       // We have reached the limit of possible duplicates to be found.
       break;
     }
-    $name = term_merge_duplicates_process_name($term->name);
-    if (!isset($groups[$name])) {
-      $groups[$name] = array();
+    $hash = '';
+    foreach ($form['settings']['duplicate_suggestion']['#default_value'] as $duplicate_suggestion) {
+      $duplicate_suggestion = term_merge_duplicate_suggestion($duplicate_suggestion);
+      $function = ctools_plugin_get_function($duplicate_suggestion, 'hash callback');
+      if ($function) {
+        $hash .= $function($term);
+      }
+    }
+    if (!isset($groups[$hash])) {
+      $groups[$hash] = array();
     }
     else {
       // We increment count by one for the just encountered duplicate. Plus, if
       // it is the second duplicate in this group, we also increment it by one
       // for the 1st duplicate in the group.
       $count++;
-      if (count($groups[$name]) == 1) {
+      if (count($groups[$hash]) == 1) {
         $count++;
       }
     }
-    $groups[$name][$term->tid] = $term;
+    $groups[$hash][$term->tid] = $term;
   }
 
   $form['wrapper'] = array(
@@ -761,31 +779,6 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
   else {
     batch_set($batch);
   }
-}
-
-/**
- * String process function.
- *
- * Manipulate supplied var $name and by the output of this function terms in a
- * vocabulary are grouped as duplicates.
- *
- * @param string $name
- *   String that needs to be manipulated
- *
- * @return string
- *   Processed string (normally it implies making it upper case, stripping down
- *   any special chars, etc.)
- */
-function term_merge_duplicates_process_name($name) {
-  // Making upper case.
-  $name = drupal_strtoupper($name);
-  // Trying transliteration, if available.
-  if (module_exists('transliteration')) {
-    $name = transliteration_get($name);
-    // Keeping only ASCII chars.
-    $name = preg_replace('#\W#', '', $name);
-  }
-  return $name;
 }
 
 /**

@@ -7,3 +7,4 @@ files[] = term_merge.test
 
 dependencies[] = taxonomy
 dependencies[] = entity
+dependencies[] = ctools

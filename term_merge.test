@@ -837,6 +837,35 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
     $groups['triple_different_parent'][2]->parent = $groups['parent'][0]->tid;
     taxonomy_term_save($groups['triple_different_parent'][2]);
 
+    // Test duplicate suggestion plugin type. Make sure multiple duplicated
+    // suggestions are properly handed and make sure each of the duplicate
+    // suggestions does its function.
+    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates');
+    $this->assertSuggestedDuplicates(array_merge($groups['triple_different_parent'], $groups['random']), 'Filtering only by term names yields expected results.');
+
+    $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', array(
+      'settings[duplicate_suggestion][name]' => FALSE,
+      'settings[duplicate_suggestion][description]' => TRUE,
+    ), 'Re-run duplicate search');
+    $this->assertSuggestedDuplicates(array_merge($groups['triple_different_parent'], $groups['random']), 'Filtering only by term description yields expected results.');
+
+    $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', array(
+      'settings[duplicate_suggestion][name]' => FALSE,
+      'settings[duplicate_suggestion][parent]' => TRUE,
+    ), 'Re-run duplicate search');
+    $expected_terms = array();
+    $expected_terms = array_merge($expected_terms, $groups['single'], $groups['random'], $groups['parent']);
+    $expected_terms[] = $groups['triple_different_parent'][0];
+    $this->assertSuggestedDuplicates($expected_terms, 'Filtering only by term parent yields expected results.');
+
+    $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', array(
+      'settings[duplicate_suggestion][name]' => TRUE,
+      'settings[duplicate_suggestion][parent]' => TRUE,
+    ), 'Re-run duplicate search');
+    $expected_terms = $groups['triple_different_parent'];
+    unset($expected_terms[0]);
+    $this->assertSuggestedDuplicates($expected_terms, 'Filtering by term name and parent yields expected results, i.e. duplicate suggestions can be combined.');
+
     // Assuring the single term is not listed as duplicate.
     $this->drupaLGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates');
     $this->assertNoText($groups['single'][0]->name, 'Single term is not listed as a duplicate.');
@@ -844,23 +873,23 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
     // Making sure the term in 'triple_different_parent' that does not have a
     // parent, is not listed when we invoke duplicate tool on a parent term.
     $this->drupalGet('taxonomy/term/' . $groups['parent'][0]->tid . '/merge/duplicates');
-    $this->assertNoFieldByName('group[' . $this->duplicateProcessName('triple_different_parent') . '][duplicates][' . $groups['triple_different_parent'][0]->tid . ']', 'Duplicate term is not listed when it is not among children of a term, on which Term Merge module was invoked.');
+    $this->assertNoFieldByName('group[' . $this->duplicateHashTerm($groups['triple_different_parent'][0]) . '][duplicates][' . $groups['triple_different_parent'][0]->tid . ']', 'Duplicate term is not listed when it is not among children of a term, on which Term Merge module was invoked.');
 
     $edit = array();
     // Trying to merge a term into another, invoking Duplicate tool on a parent
     // term of both. Important note: we do not test merging options, because
     // supposedly those are tested in the main test of this module.
-    $edit['group[' . $this->duplicateProcessName('triple_different_parent') . '][trunk_tid]'] = $groups['triple_different_parent'][1]->tid;
-    $edit['group[' . $this->duplicateProcessName('triple_different_parent') . '][duplicates][' . $groups['triple_different_parent'][2]->tid . ']'] = TRUE;
+    $edit['group[' . $this->duplicateHashTerm($groups['triple_different_parent'][1]) . '][trunk_tid]'] = $groups['triple_different_parent'][1]->tid;
+    $edit['group[' . $this->duplicateHashTerm($groups['triple_different_parent'][2]) . '][duplicates][' . $groups['triple_different_parent'][2]->tid . ']'] = TRUE;
     $groups['triple_different_parent'][2]->merged = TRUE;
     $this->drupalPost('taxonomy/term/' . $groups['parent'][0]->tid . '/merge/duplicates', $edit, 'Submit');
 
     //  Trying to merge multiple terms. We merge all but the 1st term.
     $edit = array();
-    $edit['group[' . $this->duplicateProcessName('random') . '][trunk_tid]'] = $groups['random'][0]->tid;
+    $edit['group[' . $this->duplicateHashTerm($groups['random'][0]) . '][trunk_tid]'] = $groups['random'][0]->tid;
     foreach ($groups['random'] as $k => $term) {
       if ($k != 0) {
-        $edit['group[' . $this->duplicateProcessName('random') . '][duplicates][' . $term->tid . ']'] = TRUE;
+        $edit['group[' . $this->duplicateHashTerm($groups['random'][$k]) . '][duplicates][' . $term->tid . ']'] = TRUE;
         $groups['random'][$k]->merged = TRUE;
       }
     }
@@ -892,19 +921,29 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
    *   Array of fully loaded taxonomy terms objects of the just created terms,
    *   grouped by their group name
    */
-  private function createTerms($groups) {
+  protected function createTerms($groups) {
     foreach ($groups as $name => $quantity) {
       $groups[$name] = array();
+      $description = $this->randomName();
       for ($i = 0; $i < $quantity; $i++) {
         $term_name = '';
+        $term_description = '';
         // Randomizing case of the group name.
         foreach (str_split($name) as $symbol) {
           $symbol = rand(0, 1) ? drupal_strtoupper($symbol) : drupal_strtolower($symbol);
           $term_name .= $symbol;
         }
-        $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/add', array(
+        // Getting description in different cases.
+        foreach (str_split($description) as $symbol) {
+          $symbol = rand(0, 1) ? drupal_strtoupper($symbol) : drupal_strtolower($symbol);
+          $term_description .= $symbol;
+        }
+        $term = (object) array(
+          'vid' => $this->vocabulary->vid,
           'name' => $term_name,
-        ), 'Save');
+          'description' => $description,
+        );
+        taxonomy_term_save($term);
         $groups[$name][] = $this->getLastTerm($this->vocabulary);
       }
     }
@@ -914,28 +953,61 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * Supportive method.
    *
-   * Manipulate supplied var $name and by the output of this function terms in a
-   * vocabulary are grouped as duplicates. This method should be identical to
-   * the function term_merge_duplicates_process_name(), test case replies on the
-   * fact that both manipulate the string in the identical way.
+   * Calculate hash a term based on which it will be paired with other terms as
+   * possible duplicates of each other.
    *
-   * @param string $name
-   *   String that needs to be manipulated
+   * @param object $term
+   *   Term whose duplicate suggestion hash is to be calculated
+   * @param array $duplicate_suggestions
+   *   Array of duplicate suggestion names that to apply, when determining hash
+   *   of the provided term
    *
    * @return string
-   *   Processed string (normally it implies making it upper case, stripping
-   *   down any special chars, etc.)
+   *   Hash of the provided term according to enabled duplicate suggestions
    */
-  private function duplicateProcessName($name) {
-    // Making upper case.
-    $name = drupal_strtoupper($name);
-    // Trying transliteration, if available.
-    if (module_exists('transliteration')) {
-      $name = transliteration_get($name);
-      // Keeping only ASCII chars.
-      $name = preg_replace('#\W#', '', $name);
+  protected function duplicateHashTerm($term, $duplicate_suggestions = array('name')) {
+    $hash = '';
+
+    foreach  ($duplicate_suggestions as $duplicate_suggestion) {
+      $hash_chunk = '';
+      switch ($duplicate_suggestion) {
+        case 'name':
+          $hash_chunk = drupal_strtoupper($term->name);
+          // Trying transliteration, if available.
+          if (module_exists('transliteration')) {
+            $hash_chunk = transliteration_get($hash_chunk);
+            // Keeping only ASCII chars.
+            $hash_chunk = preg_replace('#\W#', '', $hash_chunk);
+          }
+          break;
+
+        case 'description':
+          $hash_chunk = drupal_strtoupper($term->description);
+          break;
+
+        case 'parent':
+          $hash_chunk = $term->parents[0];
+          break;
+      }
+      $hash .= $hash_chunk;
     }
-    return $name;
+    return $hash;
+  }
+
+  /**
+   * Assert expected terms indeed are suggested as duplicates.
+   *
+   * @param array $expected_terms
+   *   Array of terms that are expected to be suggested as duplicates
+   * @param string $message
+   *   Assertion message to display on the test results
+   */
+  protected function assertSuggestedDuplicates($expected_terms, $message = '') {
+    $i = 0;
+    foreach ($expected_terms as $term) {
+      $this->assertPattern('#\<input\s+[^>]*type="checkbox"\s+[^>]*name="[^"]+\[duplicates]\[' . $term->tid . '\]"#si', $message . ' (for term #' . $i . ')');
+      $i++;
+    }
   }
 }
 

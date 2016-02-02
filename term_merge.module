@@ -119,10 +119,11 @@ function term_merge_permission() {
 function term_merge_action_info() {
   return array(
     'term_merge_action' => array(
-      'type' => 'taxonomy',
+      'type' => 'taxonomy_term',
       'label' => t('Merge term'),
       'configurable' => TRUE,
       'behavior' => array('changes_property'),
+      'pass rows' => TRUE,
     ),
   );
 }
@@ -215,12 +216,32 @@ function term_merge_access($vocabulary = NULL, $term = NULL, $account = NULL) {
 /**
  * Generate the configuration form for action "Term merge".
  */
-function term_merge_action_form($context) {
-  $form = array();
-
-  $form['displaimer'] = array(
-    '#markup' => '<b>' . t('Sorry, currently Term Merge action is not supported via user interface. Please, contact the maintainers at the official website if you need it enabled via user interface.') . '</b>',
-  );
+function term_merge_action_form($context, &$form_state) {
+  $term_branch_value = isset($form_state['selection']) && is_array($form_state['selection']) ? $form_state['selection'] : array();
+  $vocabulary = FALSE;
+  if (!empty($term_branch_value)) {
+    $vocabulary = db_select('taxonomy_term_data', 't')
+      ->fields('t', array('vid'))
+      ->condition('tid', reset($term_branch_value))
+      ->execute()
+      ->fetchField();
+    $vocabulary = taxonomy_vocabulary_load($vocabulary);
+  }
+  if ($vocabulary) {
+    $form = array();
+    module_load_include('inc', 'term_merge', 'term_merge.pages');
+    term_merge_form_base($form, $form_state, $vocabulary, $term_branch_value);
+    // The "step" merge parameter does not make sense here, since the batch will
+    // be invoked out of Term Merge scope.
+    $form['step']['#access'] = FALSE;
+  }
+  else {
+    $form['vocabulary_missing'] = array(
+      '#markup' => '<b>' . t('Oups, something does not seem to go right. Term merge module cannot determine within which vocabulary merge is about to happen. You might want to report it to the <a href="@url">Term Merge issue queue</a>.', array(
+        '@url' => 'https://www.drupal.org/project/issues/term_merge',
+      )) . '</b>',
+    );
+  }
 
   return $form;
 }
@@ -231,8 +252,9 @@ function term_merge_action_form($context) {
  * Store information about configurable action.
  */
 function term_merge_action_submit($form, &$form_state) {
-  // We don't have enabled UI for this action. It's just a dummy function.
-  return array();
+  return array(
+    'term_trunk' => $form_state['values']['term_trunk']['tid'],
+  ) + term_merge_merge_options_submit($form, $form_state, $form);
 }
 
 /**
@@ -793,4 +815,172 @@ function term_merge_fields_with_foreign_key($foreign_table, $foreign_column) {
   }
 
   return $result;
+}
+
+/**
+ * Form API element validate function.
+ *
+ * Make sure term trunk is not among the selected term branches or their
+ * children.
+ */
+function term_merge_form_base_term_trunk_validate($element, &$form_state, $form) {
+  $prohibited_trunks = array();
+  foreach ($form['#term_merge_term_branch'] as $term_branch) {
+    $children = taxonomy_get_tree($form['#vocabulary']->vid, $term_branch);
+    $prohibited_trunks[] = $term_branch;
+    foreach ($children as $child) {
+      $prohibited_trunks[] = $child->tid;
+    }
+  }
+  $value = drupal_array_get_nested_value($form_state['values'], $element['#parents']);
+  if (in_array($value['tid'], $prohibited_trunks)) {
+    form_error($element['tid'], t('Trunk term cannot be one of the selected branch terms or their children.'));
+  }
+}
+
+/**
+ * Supportive function.
+ *
+ * Generate form elements for select widget for term trunk element of the term
+ * merge form.
+ *
+ * @param object $vocabulary
+ *   Fully loaded taxonomy vocabulary object
+ * @param array $term_branch_value
+ *   Array of Taxonomy term IDs that are nominated as branch terms.
+ */
+function term_merge_form_term_trunk_widget_select(&$form, &$form_state, $vocabulary, $term_branch_value) {
+  $tree = taxonomy_get_tree($vocabulary->vid);
+  $options = array();
+  foreach ($tree as $v) {
+    $options[$v->tid] = str_repeat('-', $v->depth) . $v->name . ' [tid: ' . $v->tid . ']';
+  }
+
+  if (!empty($term_branch_value)) {
+    // We have to make sure among term_trunk there is no term_branch or any of
+    // their children.
+    foreach ($term_branch_value as $v) {
+      unset($options[$v]);
+      foreach (taxonomy_get_tree($vocabulary->vid, $v) as $child) {
+        unset($options[$child->tid]);
+      }
+    }
+  }
+  else {
+    // Term branch has not been selected yet.
+    $options = array();
+  }
+
+  $form['term_trunk']['tid'] = array(
+    '#type' => 'select',
+    '#required' => TRUE,
+    '#description' => t('Choose into what term you want to merge.'),
+    '#options' => $options,
+  );
+}
+
+/**
+ * Supportive function.
+ *
+ * Generate form element for hierarchical select widget for term trunk element
+ * of the term merge form.
+ *
+ * @param object $vocabulary
+ *   Fully loaded taxonomy vocabulary object
+ * @param array $term_branch_value
+ *   Array of Taxonomy term IDs that are nominated as branch terms.
+ */
+function term_merge_form_term_trunk_widget_hs_taxonomy(&$form, &$form_state, $vocabulary, $term_branch_value) {
+  $form['term_trunk']['tid'] = array(
+    '#type' => 'hierarchical_select',
+    '#description' => t('Please select a term to merge into.'),
+    '#required' => TRUE,
+    '#element_validate' => array('term_merge_form_trunk_term_widget_hs_taxonomy_validate'),
+    '#config' => array(
+      'module' => 'hs_taxonomy',
+      'params' => array(
+        'vid' => $vocabulary->vid,
+        'exclude_tid' => NULL,
+        'root_term'   => FALSE,
+      ),
+      'enforce_deepest' => 0,
+      'entity_count' => 0,
+      'require_entity' => 0,
+      'save_lineage' => 0,
+      'level_labels' => array(
+        'status' => 0,
+      ),
+      'dropbox' => array(
+        'status' => 0,
+      ),
+      'editability' => array(
+        'status' => 0,
+      ),
+      'resizable' => TRUE,
+      'render_flat_select' => 0,
+    ),
+  );
+}
+
+/**
+ * Supportive function.
+ *
+ * Generate form elements for autocomplete widget for term trunk element of the
+ * term merge form.
+ *
+ * @param object $vocabulary
+ *   Fully loaded taxonomy vocabulary object
+ * @param array $term_branch_value
+ *   Array of Taxonomy term IDs that are nominated as branch terms.
+ */
+function term_merge_form_term_trunk_widget_autocomplete(&$form, &$form_state, $vocabulary, $term_branch_value) {
+  $form['term_trunk']['tid'] = array(
+    '#type' => 'textfield',
+    '#description' => t("Start typing in a term's name in order to get some suggestions."),
+    '#required' => TRUE,
+    '#autocomplete_path' => 'term-merge/autocomplete/term-trunk/' . $vocabulary->machine_name,
+    '#element_validate' => array('term_merge_form_trunk_term_widget_autocomplete_validate'),
+  );
+}
+
+/**
+ * Supportive function.
+ *
+ * Validate form element of the autocomplete widget of term trunk element of the
+ * term merge form. Make sure the entered string is a name of one of the
+ * existing terms in the vocabulary where the merge occurs. If term is found the
+ * function substitutes the name with its {taxonomy_term_data}.tid as it is what
+ * is expected from a term trunk widget to provide in its value.
+ */
+function term_merge_form_trunk_term_widget_autocomplete_validate($element, &$form_state, $form) {
+  $term = taxonomy_get_term_by_name($element['#value'], $form['#vocabulary']->machine_name);
+  if (!is_array($term) || empty($term)) {
+    // Seems like the user has entered a non existing name in the autocomplete
+    // textfield.
+    form_error($element, t('There are no terms with name %name in the %vocabulary vocabulary.', array(
+      '%name' => $element['#value'],
+      '%vocabulary' => $form['#vocabulary']->name,
+    )));
+  }
+  else {
+    // We have to substitute the term's name with its tid in order to make this
+    // widget consistent with the interface.
+    $term = array_pop($term);
+    form_set_value($element, $term->tid, $form_state);
+  }
+}
+
+/**
+ * Supportive function.
+ *
+ * Validate form element of the Hierarchical Select widget of term trunk element
+ * of the term merge form. Convert the value from array to a single tid integer
+ * value.
+ */
+function term_merge_form_trunk_term_widget_hs_taxonomy_validate($element, &$form_state, $form) {
+  $tid = 0;
+  if (is_array($element['#value']) && !empty($element['#value'])) {
+    $tid = (int) array_pop($element['#value']);
+  }
+  form_set_value($element, $tid, $form_state);
 }

@@ -122,7 +122,7 @@ function term_merge_action_info() {
       'type' => 'taxonomy_term',
       'label' => t('Merge term'),
       'configurable' => TRUE,
-      'behavior' => array('changes_property'),
+      'behavior' => array('view_property'),
       'pass rows' => TRUE,
     ),
   );

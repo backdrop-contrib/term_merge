@@ -311,7 +311,7 @@ function term_merge_action($object, $context) {
   }
   if (!isset($context['synonyms']) || !module_exists('synonyms')) {
     // This behavior requires Synonyms module installed and enabled.
-    $context['synonyms'] = array();
+    $context['synonyms'] = NULL;
   }
 
   // Calling a hook, this way we let whoever else to react and do his own extra
@@ -429,8 +429,16 @@ function term_merge_action($object, $context) {
   }
 
   // Adding term branch as synonym (Synonyms module integration).
-  foreach ($context['synonyms'] as $synonym_field) {
-    synonyms_add_entity_as_synonym($term_trunk, 'taxonomy_term', $synonym_field, $term_branch, 'taxonomy_term');
+  if (is_array($context['synonyms'])) {
+    // TODO: this is compatible with the old version of public interface. It
+    // used to be an array of field names, but now it's just a single field
+    // name. At some point this must be removed.
+    foreach ($context['synonyms'] as $synonym_field) {
+      synonyms_add_entity_as_synonym($term_trunk, 'taxonomy_term', $synonym_field, $term_branch, 'taxonomy_term');
+    }
+  }
+  elseif ($context['synonyms']) {
+    synonyms_add_entity_as_synonym($term_trunk, 'taxonomy_term', $context['synonyms'], $term_branch, 'taxonomy_term');
   }
 
   // It turned out we gotta go tricky with the Redirect module. If we create
@@ -579,8 +587,8 @@ function term_merge_action($object, $context) {
  *       module. Use constant TERM_MERGE_NO_REDIRECT to denote not creating any
  *       HTTP redirect. Note: this parameter requires Redirect module enabled,
  *       otherwise it will be disregarded
- *     - synonyms: (array) Array of field names of trunk term into which branch
- *       terms should be added as synonyms (until each field's cardinality limit
+ *     - synonyms: (string) Optional field name of trunk term into which branch
+ *       terms should be added as synonyms (until field's cardinality limit
  *       is reached). Note: this parameter requires Synonyms module enabled,
  *       otherwise it will be disregarded
  *     - step: (int) How many term branches to merge per script run in batch. If
@@ -720,15 +728,16 @@ function term_merge_merge_options_elements($vocabulary) {
   }
 
   if (module_exists('synonyms')) {
-    $options = array();
+    $options = array('' => t('None'));
     foreach (synonyms_synonyms_fields($vocabulary) as $field_name) {
       $options[$field_name] = $instances[$field_name]['label'];
     }
     $form['synonyms'] = array(
-      '#type' => 'checkboxes',
+      '#type' => 'radios',
       '#title' => t('Add as Synonyms'),
-      '#description' => t('Synonyms module allows you to add branch terms as synonyms into any of fields, enabled as sources of synonyms in vocabulary. Check the fields into which you would like to add branch terms as synonyms. <b>Important note:</b> the values will be added until the cardinality limit for the selected fields is reached.'),
+      '#description' => t('Synonyms module allows you to add branch terms as synonyms into any of fields, enabled as sources of synonyms in vocabulary. Check the field into which you would like to add branch terms as synonym. <b>Important note:</b> the values will be added until the cardinality limit for the selected field is reached.'),
       '#options' => $options,
+      '#default_value' => '',
     );
   }
   else {
@@ -778,7 +787,7 @@ function term_merge_merge_options_submit($merge_settings_element, &$form_state, 
     'merge_fields' => isset($merge_settings_element['merge_fields']['#value']) ? array_values(array_filter($merge_settings_element['merge_fields']['#value'])) : array(),
     'keep_only_unique' => (bool) $merge_settings_element['keep_only_unique']['#value'],
     'redirect' => isset($merge_settings_element['redirect']['#value']) ? $merge_settings_element['redirect']['#value'] : TERM_MERGE_NO_REDIRECT,
-    'synonyms' => isset($merge_settings_element['synonyms']['#value']) ? array_values(array_filter($merge_settings_element['synonyms']['#value'])) : array(),
+    'synonyms' => isset($merge_settings_element['synonyms']['#value']) ? $merge_settings_element['synonyms']['#value'] : NULL,
     'step' => (int) $merge_settings_element['step']['#value'],
   );
   return $merge_settings;

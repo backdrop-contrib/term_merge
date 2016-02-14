@@ -1325,14 +1325,14 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
     actions_do('term_merge_action', $terms['branch'], array(
       'term_trunk' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
-      'synonyms' => array(),
+      'synonyms' => NULL,
     ));
     $this->assertSynonymsIntegration($terms, 'No synonyms are added, if action is not instructed to make ones.');
 
     // Testing adding as a synonym.
     actions_do('term_merge_action', $terms['branch'], array(
       'term_trunk' => $terms['trunk']->tid,
-      'synonyms' => array($this->field['field_name']),
+      'synonyms' => $this->field['field_name'],
     ));
 
     $terms['trunk']->synonyms = array($terms['branch']->name);
@@ -1350,7 +1350,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
       'term_trunk[widget]' => 'select',
       'term_trunk[tid]' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
-      'synonyms[' . $this->field['field_name'] . ']' => FALSE,
+      'synonyms' => '',
     ), 'Submit');
     $this->drupalPost(NULL, array(), 'Confirm');
     $this->assertSynonymsIntegration($terms, 'No synonyms are added after running merge batch when not instructed to add synonyms.');
@@ -1361,7 +1361,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
       'term_trunk[widget]' => 'select',
       'term_trunk[tid]' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
-      'synonyms[' . $this->field['field_name'] . ']' => TRUE,
+      'synonyms' => $this->field['field_name'],
     ), 'Submit');
     $terms['trunk']->synonyms = array($terms['branch']->name);
     $this->drupalPost(NULL, array(), 'Confirm');

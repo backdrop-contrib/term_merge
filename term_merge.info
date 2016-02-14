@@ -8,3 +8,8 @@ files[] = term_merge.test
 dependencies[] = taxonomy
 dependencies[] = entity
 dependencies[] = ctools
+
+test_dependencies[] = synonyms:synonyms
+test_dependencies[] = entityreference:entityreference
+test_dependencies[] = views:views
+test_dependencies[] = redirect:redirect

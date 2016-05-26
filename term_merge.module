@@ -169,7 +169,33 @@ function term_merge_ctools_plugin_directory($owner, $plugin_type) {
           return 'plugins/' . $plugin_type;
       }
       break;
+
+    case 'synonyms':
+      switch ($plugin_type) {
+        case 'behavior':
+          return 'plugins/' . $plugin_type;
+      }
+      break;
   }
+}
+
+/**
+ * Implements hook_synonyms_provider_field_behavior_implementation_info().
+ */
+function term_merge_synonyms_provider_field_behavior_implementation_info($behavior) {
+  switch ($behavior) {
+    case 'term_merge':
+      return array(
+        'number_integer' => 'TextTermMergeSynonymsBehavior',
+        'number_decimal' => 'TextTermMergeSynonymsBehavior',
+        'number_float' => 'TextTermMergeSynonymsBehavior',
+        'text' => 'TextTermMergeSynonymsBehavior',
+        'taxonomy_term_reference' => 'TaxonomyTermMergeSynonymsBehavior',
+        'entityreference' => 'EntityReferenceTermMergeSynonymsBehavior',
+      );
+      break;
+  }
+  return array();
 }
 
 /**
@@ -429,16 +455,9 @@ function term_merge_action($object, $context) {
   }
 
   // Adding term branch as synonym (Synonyms module integration).
-  if (is_array($context['synonyms'])) {
-    // TODO: this is compatible with the old version of public interface. It
-    // used to be an array of field names, but now it's just a single field
-    // name. At some point this must be removed.
-    foreach ($context['synonyms'] as $synonym_field) {
-      synonyms_add_entity_as_synonym($term_trunk, 'taxonomy_term', $synonym_field, $term_branch, 'taxonomy_term');
-    }
-  }
-  elseif ($context['synonyms']) {
-    synonyms_add_entity_as_synonym($term_trunk, 'taxonomy_term', $context['synonyms'], $term_branch, 'taxonomy_term');
+  if ($context['synonyms']) {
+    $res = term_merge_add_entity_as_synonym($term_trunk, 'taxonomy_term', $context['synonyms'], $term_branch, 'taxonomy_term');
+    debug($res);
   }
 
   // It turned out we gotta go tricky with the Redirect module. If we create
@@ -729,8 +748,18 @@ function term_merge_merge_options_elements($vocabulary) {
 
   if (module_exists('synonyms')) {
     $options = array('' => t('None'));
-    foreach (synonyms_synonyms_fields($vocabulary) as $field_name) {
-      $options[$field_name] = $instances[$field_name]['label'];
+    if (function_exists('synonyms_behavior_get')) {
+      // We are in Synonyms 7.x-1.5 and above.
+      foreach (synonyms_behavior_get('term_merge', 'taxonomy_term', $vocabulary->machine_name, TRUE) as $behavior_implementation) {
+        $options[$behavior_implementation['provider']] = $behavior_implementation['label'];
+      }
+    }
+    else {
+      // This is how we used to retrieve possible synonyms field prior to
+      // Synonyms 7.x-1.5. TODO: this should be removed at some point.
+      foreach (synonyms_synonyms_fields($vocabulary) as $field_name) {
+        $options[$field_name] = $instances[$field_name]['label'];
+      }
     }
     $form['synonyms'] = array(
       '#type' => 'radios',
@@ -824,6 +853,51 @@ function term_merge_fields_with_foreign_key($foreign_table, $foreign_column) {
   }
 
   return $result;
+}
+
+/**
+ * Allow to merge $synonym_entity as a synonym into $trunk_entity.
+ *
+ * Helpful function during various merging operations. It allows you to add a
+ * synonym (where possible) into one entity, which will represent another entity
+ * in the format expected by the field in which the synonym is being added.
+ *
+ * @param object $trunk_entity
+ *   Fully loaded entity object in which the synonym is being added
+ * @param string $trunk_entity_type
+ *   Entity type of $trunk_entity
+ * @param string $behavior_provider
+ *   Machine name of behavior implementation into which the synonym entity
+ *   should be merged
+ * @param object $synonym_entity
+ *   Fully loaded entity object which will be added as a synonym
+ * @param string $synonym_entity_type
+ *   Entity type of $synonym_entity
+ *
+ * @return bool
+ *   Whether synonym has been successfully added
+ */
+function term_merge_add_entity_as_synonym($trunk_entity, $trunk_entity_type, $behavior_provider, $synonym_entity, $synonym_entity_type) {
+  if ($trunk_entity_type != 'taxonomy_term') {
+    // So far we only work with taxonomy terms.
+    return FALSE;
+  }
+
+  $bundle = entity_extract_ids($trunk_entity_type, $trunk_entity);
+  $bundle = $bundle[2];
+
+  $behavior_implementations = synonyms_behavior_get_all_enabled($trunk_entity_type, $bundle, $behavior_provider);
+
+  foreach ($behavior_implementations as $behavior_implementation) {
+    if ($behavior_implementation['behavior'] == 'term_merge') {
+      $behavior_implementation['object']->mergeTerm($trunk_entity, $synonym_entity, $synonym_entity_type);
+
+      taxonomy_term_save($trunk_entity);
+      return TRUE;
+    }
+  }
+
+  return FALSE;
 }
 
 /**

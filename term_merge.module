@@ -456,8 +456,7 @@ function term_merge_action($object, $context) {
 
   // Adding term branch as synonym (Synonyms module integration).
   if ($context['synonyms']) {
-    $res = term_merge_add_entity_as_synonym($term_trunk, 'taxonomy_term', $context['synonyms'], $term_branch, 'taxonomy_term');
-    debug($res);
+    term_merge_add_entity_as_synonym($term_trunk, 'taxonomy_term', $context['synonyms'], $term_branch, 'taxonomy_term');
   }
 
   // It turned out we gotta go tricky with the Redirect module. If we create
@@ -1036,19 +1035,28 @@ function term_merge_form_term_trunk_widget_autocomplete(&$form, &$form_state, $v
  * is expected from a term trunk widget to provide in its value.
  */
 function term_merge_form_trunk_term_widget_autocomplete_validate($element, &$form_state, $form) {
-  $term = taxonomy_get_term_by_name($element['#value'], $form['#vocabulary']->machine_name);
-  if (!is_array($term) || empty($term)) {
-    // Seems like the user has entered a non existing name in the autocomplete
-    // textfield.
-    form_error($element, t('There are no terms with name %name in the %vocabulary vocabulary.', array(
-      '%name' => $element['#value'],
+  // Field value is "name (tid)", match the tid from parenthesis.
+  if (preg_match("/.+\((\d+)\)$/", $element['#value'], $matches)) {
+    $term = taxonomy_term_load($matches[1]);
+  }
+  else {
+    // Assume that the user didn't use the autocomplete but filled in a tid
+    // manually.
+    $term = taxonomy_get_term_by_name($element['#value'], $form['#vocabulary']->machine_name);
+    $term = reset($term);
+  }
+
+  if (empty($term)) {
+    // Seems like the user has entered a non existing name or tid in the
+    // autocomplete textfield.
+    form_error($element, t('There are no terms matching %value in the %vocabulary vocabulary.', array(
+      '%value' => $element['#value'],
       '%vocabulary' => $form['#vocabulary']->name,
     )));
   }
   else {
-    // We have to substitute the term's name with its tid in order to make this
+    // We have to substitute the field value the term tid in order to make this
     // widget consistent with the interface.
-    $term = array_pop($term);
     form_set_value($element, $term->tid, $form_state);
   }
 }

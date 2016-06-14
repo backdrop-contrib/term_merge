@@ -263,12 +263,14 @@ function term_merge_form_term_trunk_widget_autocomplete_autocomplete($vocabulary
 
   $term_matches = array();
   foreach ($tags_return as $tid => $name) {
-    $n = $name;
-    // Term names containing commas or quotes must be wrapped in quotes.
-    if (strpos($name, ',') !== FALSE || strpos($name, '"') !== FALSE) {
-      $n = '"' . str_replace('"', '""', $name) . '"';
+    // Add both term name and tid to array key in order to allow multiple terms
+    // with same name to be displayed.
+    $key = "$name ($tid)";
+    // Names containing commas or quotes must be wrapped in quotes.
+    if (strpos($key, ',') !== FALSE || strpos($key, '"') !== FALSE) {
+      $key = '"' . str_replace('"', '""', $key) . '"';
     }
-    $term_matches[$n] = check_plain($name . ' [tid: ' . $tid . ']');
+    $term_matches[$key] = check_plain($name . ' [tid: ' . $tid . ']');
   }
 
   drupal_json_output($term_matches);

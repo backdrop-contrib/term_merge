@@ -534,6 +534,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
       'taxonomy_term_tab',
       'via_term_trunk_widget_select',
       'via_term_trunk_widget_autocomplete',
+      'via_term_trunk_widget_autocomplete_without_tid',
       'merge_fields',
       'do_not_merge_fields',
     );
@@ -627,7 +628,34 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           // with valid suggestions.
           $response = $this->drupalGet('term-merge/autocomplete/term-trunk/' . $this->vocabulary->machine_name . '/' . drupal_strtoupper($terms['term_trunk']->name));
           $response = drupal_json_decode($response);
-          $this->assertTrue(isset($response[$terms['term_trunk']->name]), 'Autocomplete menu path replies with valid suggestions for term trunk autocomplete widget.');
+          $autocomplete_key = $terms['term_trunk']->name . ' (' . $terms['term_trunk']->tid . ')';
+          $this->assertTrue(isset($response[$autocomplete_key]), 'Autocomplete menu path replies with valid suggestions for term trunk autocomplete widget.');
+
+          // Making sure for the term trunk autocomplete widget doesn't allow to
+          // submit any of the selected term branches nor their children.
+          $prohibited_terms = array(
+            'parent' => 'Merging into the same term is not allowed in autocomplete widget for term trunk.',
+            'child' => 'Merging into any of child of selected branch terms is not allowed in autocomplete widget for term trunk.',
+          );
+          foreach ($prohibited_terms as $term => $assert_message) {
+            $term = $terms[$term];
+            $this->drupalGet($init_url);
+            $this->drupalPostAJAX(NULL, array(
+              'term_branch[]' => array($terms['parent']->tid),
+              'term_trunk[widget]' => $term_trunk_widget,
+            ), 'term_trunk[widget]');
+            $this->drupalPost(NULL, array(
+              'term_branch[]' => array($terms['parent']->tid),
+              'term_trunk[widget]' => $term_trunk_widget,
+              'term_trunk[tid]' => $term->name . ' (' . $term->tid . ')',
+            ), 'Submit');
+            $this->assertText('Trunk term cannot be one of the selected branch terms or their children', $assert_message);
+          }
+          break;
+
+        case 'via_term_trunk_widget_autocomplete_without_tid':
+          $init_url = 'admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge';
+          $term_trunk_widget = 'autocomplete';
 
           // Making sure for the term trunk autocomplete widget doesn't allow to
           // submit any of the selected term branches nor their children.
@@ -704,7 +732,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           break;
 
         case 'autocomplete':
-          $term_trunk_edit += array('term_trunk[tid]' => $terms['term_trunk']->name);
+          $term_trunk_edit += array('term_trunk[tid]' => $terms['term_trunk']->name . ' (' . $terms['term_trunk']->tid . ')');
           break;
       }
 

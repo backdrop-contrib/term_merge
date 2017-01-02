@@ -27,11 +27,9 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
 
   /**
    * SetUp method.
-   *
-   * @param array $modules
-   *   Array of modules that need to be enabled for test case
    */
-  public function setUp(array $modules = array()) {
+  public function setUp() {
+    $modules = $this->normalizeSetUpArguments(func_get_args());
     $modules[] = 'term_merge';
     parent::setUp($modules);
 
@@ -79,6 +77,24 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
     $term = entity_load_unchanged('taxonomy_term', $term->tid);
     return $term;
   }
+
+  /**
+   * Normalize the input arguments of ::setUp() method.
+   *
+   * The arguments of ::setUp() method can either be a single argument (array of
+   * modules) or a set of input arguments where each single argument is a module
+   * name.
+   *
+   * @param array $args
+   *   Array of input arguments given to a ::setUp() method
+   *
+   * @return array
+   *   Array of modules that are given to a ::setUp() method.
+   */
+  protected function normalizeSetUpArguments($args) {
+    return (isset($args[0]) && is_array($args[0])) ? $args[0] : $args;
+  }
+
 }
 
 /**
@@ -1072,7 +1088,8 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * SetUp method.
    */
-  public function setUp(array $modules = array()) {
+  public function setUp() {
+    $modules = $this->normalizeSetUpArguments(func_get_args());
     $modules[] = 'redirect';
     $modules[] = 'path';
     parent::setUp($modules);
@@ -1299,7 +1316,8 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * SetUp method.
    */
-  public function setUp(array $modules = array()) {
+  public function setUp() {
+    $modules = $this->normalizeSetUpArguments(func_get_args());
     $modules[] = 'synonyms';
     $modules[] = 'synonyms_provider_field';
     parent::setUp($modules);
@@ -1486,7 +1504,8 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
   /**
    * SetUp method.
    */
-  public function setUp(array $modules = array()) {
+  public function setUp() {
+    $modules = $this->normalizeSetUpArguments(func_get_args());
     $modules[] = 'views';
     parent::setUp($modules);
     // Additionally we create a view.
@@ -1646,7 +1665,8 @@ class EntityReferenceTermMergeWebTestCase extends TermMergeWebTestCase {
     );
   }
 
-  public function setUp(array $modules = array()) {
+  public function setUp() {
+    $modules = $this->normalizeSetUpArguments(func_get_args());
     $modules[] = 'entityreference';
     parent::setUp($modules);
 

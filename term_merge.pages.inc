@@ -670,13 +670,13 @@ function term_merge_duplicates_fieldset_preprocess($element) {
   foreach ($options as $tid => $row) {
     $element['trunk_tid'][$tid]['#title_display'] = 'invisible';
     $options[$tid] = array(
-        'trunk' => drupal_render($element['trunk_tid'][$tid]),
-      ) + $options[$tid];
+      'trunk' => drupal_render($element['trunk_tid'][$tid]),
+    ) + $options[$tid];
   }
   $element['trunk_tid']['#title_display'] = 'invisible';
   $element['duplicates']['#header'] = array(
-      'trunk' => $element['trunk_tid']['#title'],
-    ) + $element['duplicates']['#header'];
+    'trunk' => $element['trunk_tid']['#title'],
+  ) + $element['duplicates']['#header'];
 
   return $element;
 }
@@ -710,7 +710,7 @@ function term_merge_duplicates_form_settings($form, &$form_state) {
 /**
  * Supportive array_filter() callback function.
  *
- * Eliminate all array elements, whose dimension is less than 1.
+ * Eliminate all array elements, whose length is less than 1.
  */
 function term_merge_duplicates_form_filter($array_element) {
   return count($array_element) > 1;

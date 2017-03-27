@@ -31,8 +31,8 @@ class EntityReferenceTermMergeSynonymsBehavior extends EntityReferenceSynonymsBe
    *   Entity type of $synonym_entity
    */
   public function mergeTerm($trunk_entity, $synonym_entity, $synonym_entity_type) {
-    // Firstly validating that this entity reference is able to reference to
-    // that type of entity.
+    // Firstly validating that this entity reference is able to reference that
+    // type of entity.
     $expected_synonym_entity_type = $this->field['settings']['target_type'];
 
     $items = $this->entityItems($trunk_entity);

@@ -45,7 +45,7 @@ function term_merge_form_base(&$form, &$form_state, $vocabulary, $term_branch_va
 
   // If the vocabulary is too big, by default we want the trunk term widget to
   // be autocomplete instead of select or hs_taxonomy.
-  if (count($tree) > 200) {
+  if (count($tree) > variable_get('term_merge_select_limit', 200)) {
     $term_trunk_widget = 'autocomplete';
   }
 

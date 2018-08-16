@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Install, uninstall, and update hooks of the module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function term_merge_uninstall() {
+  // Cleaning all variables.
+  $results = db_select('variable', 'var')
+    ->fields('var', array('name'))
+    ->condition('var.name', db_like('term_merge_') . '%', 'LIKE')
+    ->execute();
+  foreach ($results as $var) {
+    variable_del($var->name);
+  }
+}

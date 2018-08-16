@@ -34,6 +34,7 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
     parent::setUp($modules);
 
     $this->admin = $this->drupalCreateUser(array(
+      'administer fields',
       'administer taxonomy',
       'merge terms',
       'administer content types',

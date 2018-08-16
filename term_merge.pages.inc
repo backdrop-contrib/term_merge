@@ -201,7 +201,7 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
   else {
     // We are at the confirmation step.
     $count = count($form_state['values']['term_branch']);
-    $question = format_plural($count, 'Are you sure want to merge 1 term?', 'Are you sure want to merge @count terms?');
+    $question = format_plural($count, 'Are you sure you want to merge 1 term?', 'Are you sure you want to merge @count terms?');
     $form = confirm_form($form, $question, 'admin/structure/taxonomy/' . $vocabulary->machine_name);
   }
 

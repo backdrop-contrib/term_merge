@@ -135,7 +135,7 @@ function term_merge_help($path, $arg) {
   switch ($path) {
     // Main module help for the Term Merge module.
     case 'admin/help#term_merge':
-      return '<p>' . t('Allows you to merge multiple terms into one and and at the same time update all fields referencing to the old ones.') . '</p>';
+      return '<p>' . t('Allows you to merge multiple terms into one and and at the same time update all fields referencing the old ones.') . '</p>';
       break;
   }
 }
@@ -263,7 +263,7 @@ function term_merge_action_form($context, &$form_state) {
   }
   else {
     $form['vocabulary_missing'] = array(
-      '#markup' => '<b>' . t('Oups, something does not seem to go right. Term merge module cannot determine within which vocabulary merge is about to happen. You might want to report it to the <a href="@url">Term Merge issue queue</a>.', array(
+      '#markup' => '<b>' . t('Oops, something did not seem to go right. Term merge module cannot determine within which vocabulary merge is about to happen. You might want to report it to the <a href="@url">Term Merge issue queue</a>.', array(
         '@url' => 'https://www.drupal.org/project/issues/term_merge',
       )) . '</b>',
     );

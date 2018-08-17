@@ -36,6 +36,7 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
     $this->admin = $this->drupalCreateUser(array(
       'administer fields',
       'administer taxonomy',
+      'administer term merge',
       'merge terms',
       'administer content types',
       'bypass node access',
@@ -508,6 +509,11 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->assertResponse(403, 'Per vocabulary term merge permissions are respected in the module - an account cannot merge terms in the vocabulary in which he is not supposed to be able to merge.');
     $this->drupalGet('admin/structure/taxonomy/vocabulary2/merge');
     $this->assertResponse(200, 'Per vocabulary term merge permissions are respected in the module - an account can merge terms in the vocabulary in which he is supposed to be able to merge.');
+
+    // Test the threshold for "select" widget of the trunk term.
+    variable_set('term_merge_select_limit', 0);
+    $this->drupalGet('admin/structure/taxonomy/vocabulary2/merge');
+    $this->assertFieldByXPath('//input[@type="radio"][@name="term_trunk[widget]"][@value="autocomplete"][@checked="checked"]', NULL, 'Threshold for "select" widget of the trunk term is taken into consideration.');
   }
 
   /**
@@ -1097,6 +1103,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
 
     $this->superAdmin = $this->drupalCreateUser(array(
       'administer taxonomy',
+      'administer term merge',
       'merge terms',
       'administer content types',
       'bypass node access',
@@ -1126,9 +1133,13 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
     $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertNoPattern('#\<select[^>]+name="redirect"[^>]*\>#i', 'No redirection settings are available for a user that does not possess corresponding permissions.');
 
+    // Set a default value to make sure term merge form uses it.
+    variable_set('term_merge_default_redirect', 0);
+
     $this->drupalLogin($this->superAdmin);
     $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertPattern('#\<select[^>]+name="redirect"[^>]*\>#i', 'Redirection settings are available for a user that possesses corresponding permissions.');
+    $this->assertFieldByXPath('//select[@name="redirect"]/option[@value="' . variable_get('term_merge_default_redirect', TERM_MERGE_NO_REDIRECT) . '"][@selected="selected"]',  NULL,'The default redirect action is properly set.');
 
     // Making sure redirect settings are not available during merging when
     // merging with disabled Redirect module.

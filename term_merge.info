@@ -2,6 +2,7 @@ name = Term Merge
 description = This module allows you to merge multiple terms into one, while updating all fields referring to those terms to refer to the replacement term instead.
 package = Taxonomy
 core = 7.x
+configure = admin/config/user-interface/term-merge
 
 files[] = term_merge.test
 

@@ -81,6 +81,15 @@ function term_merge_menu() {
     'type' => MENU_CALLBACK,
   );
 
+  $items['admin/config/user-interface/term-merge'] = array(
+    'title' => 'Term Merge settings',
+    'description' => 'Configure Term Merge module.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('term_merge_admin_settings_form'),
+    'access arguments' => array('administer term merge'),
+    'file' => 'term_merge.admin.inc',
+  );
+
   return $items;
 }
 
@@ -99,6 +108,12 @@ function term_merge_admin_paths() {
  */
 function term_merge_permission() {
   $permissions = array();
+
+  $permissions['administer term merge'] = array(
+    'title' => t('Administer Term merge'),
+    'description' => t('Administer settings of the Term merge module.'),
+  );
+
   $permissions['merge terms'] = array(
     'title' => t('Merge any terms'),
     'description' => t('Gives the ability to merge any taxonomy terms.'),
@@ -722,12 +737,6 @@ function term_merge_merge_options_elements($vocabulary) {
   );
 
   if (module_exists('redirect')) {
-    $options = array(
-      TERM_MERGE_NO_REDIRECT => t('No redirect'),
-      0 => t('Default (@default)', array(
-        '@default' => variable_get('redirect_default_status_code', 301),
-      )),
-    ) + redirect_status_code_options();
     $form['redirect'] = array(
       // We respect access rights defined in redirect.module here.
       '#access' => user_access('administer redirects'),
@@ -735,8 +744,8 @@ function term_merge_merge_options_elements($vocabulary) {
       '#title' => t('Create Redirect'),
       '#description' => t('If you want to create an HTTP redirect from your branch terms to the trunk term, please, choose the HTTP redirect code here.'),
       '#required' => TRUE,
-      '#options' => $options,
-      '#default_value' => TERM_MERGE_NO_REDIRECT,
+      '#options' => term_merge_redirect_options(),
+      '#default_value' => variable_get('term_merge_default_redirect', TERM_MERGE_NO_REDIRECT),
     );
   }
   else {
@@ -1074,4 +1083,19 @@ function term_merge_form_trunk_term_widget_hs_taxonomy_validate($element, &$form
     $tid = (int) array_pop($element['#value']);
   }
   form_set_value($element, $tid, $form_state);
+}
+
+/**
+ * Retrieve options for possible redirect actions.
+ *
+ * @return array
+ *   Array of options that represent possible redirect actions.
+ */
+function term_merge_redirect_options() {
+  return array(
+      TERM_MERGE_NO_REDIRECT => t('No redirect'),
+      0 => t('Default (@default)', array(
+        '@default' => variable_get('redirect_default_status_code', 301),
+      )),
+    ) + redirect_status_code_options();
 }

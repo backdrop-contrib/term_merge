@@ -1,0 +1,35 @@
+[TermMergeTermMergeWebTestCase]
+name = Term Merge
+description = Ensure that the module Term Merge works correctly.
+group = Term Merge
+file = term_merge.test
+
+[DuplicatesTermMergeWebTestCase]
+name = Duplicate terms merge
+description = Ensure that the feature <i>merge duplicate terms</i> of module Term Merge works correctly.
+group = Term Merge
+file = term_merge.test
+
+[RedirectTermMergeWebTestCase]
+name = Redirect module integration
+description = Ensure that the module Term Merge integrates with core Redirect functionality.
+group = Term Merge
+file = term_merge.test
+
+[SynonymsTermMergeWebTestCase]
+name = Synonyms module integration
+description = Ensure that the module Term Merge integrates with Synonyms module correctly.
+group = Term Merge
+file = term_merge.test
+
+[ViewsTermMergeWebTestCase]
+name = Views module integration
+description = Ensure that the module Term Merge integrates with Views module correctly.
+group = Term Merge
+file = term_merge.test
+
+[EntityReferenceTermMergeWebTestCase]
+name = Term Merge Entity Reference
+description = Ensure that the module Term Merge integrates with Entity Reference field type correctly.
+group = Term Merge
+file = term_merge.test

@@ -15,5 +15,5 @@ $plugin = array(
  * Hash term based on its description.
  */
 function term_merge_duplicate_suggestion_description_hash($term) {
-  return drupal_strtoupper($term->description);
+  return backdrop_strtoupper($term->description);
 }

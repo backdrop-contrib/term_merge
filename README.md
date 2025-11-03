@@ -1,11 +1,5 @@
-Term Merge
-------------------------
-by:
- * Max Nylin <max@articstudios.se>
- * Oleksandr Trotsenko
+# Term Merge
 
-Description
------------
 When using taxonomy for free tagging purposes, it's easy to end up with several
 terms having the same meaning. This may be due to spelling errors, or different
 users simply making up synonymous terms as they go.
@@ -37,35 +31,55 @@ with the following heuristics:
 You can indicate which specific heuristics should be used for searching
 duplicates within the UI of duplicate suggestion tool.
 
-Integration
--------------
+## Integration
+
 Currently module integrates with the following core and contributed modules:
- * Redirect module (http://drupal.org/project/redirect). During term merging you
+ * Redirect module (in Backdrop core). During term merging you
    may set up SEO friendly redirects from the branch terms to point to the trunk
    term.
- * Synonyms module (http://drupal.org/project/synonyms). During term merging you
-   will be able to choose a trunk term's field into which all the branch terms
-   will be added as synonyms (until cardinality limit for that field is
-   reached).
- * Hierarchical Select (http://drupal.org/project/hierarchical_select). If
-   Hierarchical Select module is configured to be used for working with
-   Taxonomy, its widget will be shown on the form, where you choose what terms
-   to merge.
- * Views (http://drupal.org/project/views). If the branch terms are to be
+ * Views (in Backdrop core). If the branch terms are to be
    deleted after the merging process, you could end up having some Views filters
    to filter on no longer existing terms. Term Merge module, while merging
    terms, will update those filters to filter not on the branch term, but on the
    trunk term. This way you will not have senseless filters and will not have to
    update them manually.
+ * Taxonomy Manager (contrib). A "Merge" button is provided in the Taxonomy
+   Manager interface if this module is also enabled.
 
-Requirements
--------------
-The modules requires enabled the following modules:
- * Taxonomy module (ships with Drupal core)
- * Entity API (https://drupal.org/project/entity)
- * cTools (https://www.drupal.org/project/ctools)
+## Requirements
 
-Installation
-------------
- * Copy the module's directory to your modules directory and activate the
- module.
+  - Taxonomy module enabled
+  - [Plugin Manager](https://github.com/backdrop-contrib/plugin_manager)
+
+## Installation and Usage
+
+- Install this module using the [official Backdrop CMS instructions](https://backdropcms.org/guide/modules)
+- Usage instructions can be [viewed and edited in the Wiki](https://github.com/backdrop-contrib/term_merge/wiki).
+
+## Issues
+
+ - Bugs and Feature requests should be reported in the [Issue Queue](https://github.com/backdrop-contrib/term_merge/issues).
+
+## Current Maintainers
+
+ - [Laryn Kragt Bakker](https://github.com/laryn).
+ - Seeking co-maintainers
+
+## Credits
+
+ - Ported to Backdrop CMS by [Laryn Kragt Bakker](https://github.com/laryn).
+ - Backdrop development is supported by [Aten Design Group](https://aten.io).
+ - Maintainers on drupal.org include [aurelianzaha](https://www.drupal.org/u/aurelianzaha),
+   [bucefal91](https://www.drupal.org/u/bucefal91),
+   [daniel_j](https://www.drupal.org/u/daniel_j),
+   [eli](https://www.drupal.org/u/eli),
+   [g.i.joe](https://www.drupal.org/u/g.i.joe),
+   [legolasbo](https://www.drupal.org/u/legolasbo),
+   [nylin](https://www.drupal.org/u/nylin),
+   [bleen](https://www.drupal.org/u/bleen).
+ - Original authors: Max Nylin, and Oleksandr Trotsenko.
+
+## License
+
+This project is GPL v2 software. See the LICENSE.txt file in this directory for
+complete text.

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * @file
  * Test the Term Merge module.
@@ -8,10 +7,10 @@
 /**
  * Base class for all tests of Term Merge module.
  */
-class TermMergeWebTestCase extends DrupalWebTestCase {
+class TermMergeWebTestCase extends BackdropWebTestCase {
 
   /**
-   * Fully loaded Drupal user who has access to all required parts of the
+   * Fully loaded Backdrop user who has access to all required parts of the
    * website for testing.
    *
    * @var object
@@ -19,7 +18,7 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
   protected $admin;
 
   /**
-   * Fully loaded Drupal taxonomy vocabulary object on which all tests are run.
+   * Fully loaded Backdrop taxonomy vocabulary object on which all tests are run.
    *
    * @var object
    */
@@ -30,10 +29,13 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
    */
   public function setUp() {
     $modules = $this->normalizeSetUpArguments(func_get_args());
-    $modules[] = 'term_merge';
+    $modules = [
+      'plugin_manager',
+      'term_merge',
+    ];
     parent::setUp($modules);
 
-    $this->admin = $this->drupalCreateUser(array(
+    $this->admin = $this->backdropCreateUser(array(
       'administer fields',
       'administer taxonomy',
       'administer term merge',
@@ -43,14 +45,14 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
     ));
 
     // Creating vocabularies.
-    $this->drupalLogin($this->admin);
+    $this->backdropLogin($this->admin);
     $name = $this->randomName();
-    $this->drupalPost('admin/structure/taxonomy/add', array(
+    $this->backdropPost('admin/structure/taxonomy/add', array(
       'name' => $name,
       'machine_name' => 'vocabulary',
       'description' => $this->randomName(),
     ), 'Save');
-    $this->vocabulary = taxonomy_vocabulary_machine_name_load('vocabulary');
+    $this->vocabulary = taxonomy_vocabulary_load('vocabulary');
     // Flushing static cache.
     _field_info_collate_fields(TRUE);
   }
@@ -66,8 +68,8 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
    *   the specified vocabulary
    */
   protected function getLastTerm($vocabulary) {
-    drupal_static_reset();
-    $tree = taxonomy_get_tree($vocabulary->vid);
+    backdrop_static_reset();
+    $tree = taxonomy_get_tree($vocabulary->machine_name);
     $max = 0;
     $term = NULL;
     foreach ($tree as $v) {
@@ -105,17 +107,6 @@ class TermMergeWebTestCase extends DrupalWebTestCase {
 class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
 
   /**
-   * GetInfo method.
-   */
-  public static function getInfo() {
-    return array(
-      'name' => 'Term Merge',
-      'description' => 'Ensure that the module Term Merge works correctly.',
-      'group' => 'Term Merge',
-    );
-  }
-
-  /**
    * Test merging two terms.
    */
   public function testTermMerge() {
@@ -139,23 +130,24 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         $edit['parent[]'] = array($terms['branch']->tid, $terms['another_parent']->tid);
       }
 
-      $this->drupalPost($url, $edit, 'Save');
+      $this->backdropPost($url, $edit, 'Save');
       $terms[$term_type] = $this->getLastTerm($this->vocabulary);
     }
 
     // Firstly we try to merge without deleting the branch term and make sure
     // branch's children are not reassigned to the trunk term nor the branch
     // term itself is deleted.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'merge_fields' => array(),
       'term_branch_keep' => TRUE,
-    ));
-    $this->drupalGet('taxonomy/term/' . $terms['branch']->tid);
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
+    $this->backdropGet('taxonomy/term/' . $terms['branch']->tid);
     $this->assertText($terms['branch']->name);
-    drupal_static_reset();
+    backdrop_static_reset();
     $parents = array();
-    foreach (taxonomy_get_parents_all($terms['branch_child']->tid) as $parent) {
+    foreach (taxonomy_term_load_parents_all($terms['branch_child']->tid) as $parent) {
       $parents[] = $parent->tid;
     }
     $valid_parents = array(
@@ -168,16 +160,17 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
 
     // Now we merge with deletion of branch term, thus the parents of its
     // children have to be updated.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'merge_fields' => array(),
       'term_branch_keep' => FALSE,
-    ));
-    $this->drupalGet('taxonomy/term/' . $terms['branch']->tid);
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
+    $this->backdropGet('taxonomy/term/' . $terms['branch']->tid);
     $this->assertResponse(404, 'The branch term has been deleted.');
-    drupal_static_reset();
+    backdrop_static_reset();
     $parents = array();
-    foreach (taxonomy_get_parents_all($terms['branch_child']->tid) as $parent) {
+    foreach (taxonomy_term_load_parents_all($terms['branch_child']->tid) as $parent) {
       $parents[] = $parent->tid;
     }
     $valid_parents = array(
@@ -221,7 +214,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
 
     foreach ($terms as $term_type => $tmp) {
       $term = (object) array(
-        'vid' => $this->vocabulary->vid,
+        'vocabulary' => $this->vocabulary->machine_name,
         'name' => $this->randomName(),
       );
 
@@ -251,13 +244,14 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
 
     // Firstly we make sure if 'merge_fields' is disabled, the fields are not
     // merged.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'merge_fields' => array(),
       'term_branch_keep' => TRUE,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
 
-    $this->drupalGet('taxonomy/term/' . $terms['trunk']->tid);
+    $this->backdropGet('taxonomy/term/' . $terms['trunk']->tid);
     foreach ($fields_map as $field_name => $cardinality) {
       foreach (field_get_items('taxonomy_term', $terms['branch'], $field_name) as $item) {
         if ($field_name != 'term_merge_not_unique') {
@@ -270,7 +264,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     // should be added to the trunk term's values only in where we asked them
     // to be added. Moreover, only unique values are to be kept in each of the
     // merged fields.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'merge_fields' => array(
         'term_merge_test_single',
@@ -278,9 +272,10 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         'term_merge_not_unique',
       ),
       'term_branch_keep' => TRUE,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
 
-    $this->drupalGet('taxonomy/term/' . $terms['trunk']->tid);
+    $this->backdropGet('taxonomy/term/' . $terms['trunk']->tid);
     foreach ($fields_map as $field_name => $cardinality) {
       switch ($field_name) {
         case 'term_merge_test_single':
@@ -326,26 +321,26 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         'name' => $name,
       );
 
-      $this->drupalPost($url, $edit, 'Save');
+      $this->backdropPost($url, $edit, 'Save');
       $terms[$term_type] = $this->getLastTerm($this->vocabulary);
     }
 
     // Firstly we need to create a new content type and assign term reference
     // field to this new content type.
-    $this->drupalPost('admin/structure/types/add', array(
+    $this->backdropPost('admin/structure/types/add', array(
       'name' => $this->randomName(),
       'type' => 'term_merge_node',
     ), 'Save content type');
-    $this->drupalPost('admin/structure/types/manage/term-merge-node/fields', array(
+    $this->backdropPost('admin/structure/types/manage/term-merge-node/fields', array(
       'fields[_add_new_field][label]' => 'Term Reference',
       'fields[_add_new_field][field_name]' => 'term_reference',
       'fields[_add_new_field][type]' => 'taxonomy_term_reference',
       'fields[_add_new_field][widget_type]' => 'taxonomy_autocomplete',
     ), 'Save');
-    $this->drupalPost(NULL, array(
+    $this->backdropPost(NULL, array(
       'field[settings][allowed_values][0][vocabulary]' => $this->vocabulary->machine_name,
     ), 'Save field settings');
-    $this->drupalPost(NULL, array(
+    $this->backdropPost(NULL, array(
       'field[cardinality]' => FIELD_CARDINALITY_UNLIMITED,
     ), 'Save settings');
     // Flushing fields API cache.
@@ -353,17 +348,18 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     // Creating a new node and settings its term reference field to point to
     // the term branch.
     $title = $this->randomName();
-    $this->drupalPost('node/add/term-merge-node', array(
+    $this->backdropPost('node/add/term-merge-node', array(
       'title' => $title,
       'field_term_reference[' . LANGUAGE_NONE . ']' => $terms['branch']->name,
     ), 'Save');
-    $node = $this->drupalGetNodeByTitle($title, TRUE);
-    actions_do('term_merge_action', $terms['branch'], array(
+    $node = $this->backdropGetNodeByTitle($title, TRUE);
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'merge_fields' => array(),
       'term_branch_keep' => TRUE,
-    ));
-    $this->drupalGet('node/' . $node->nid);
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
+    $this->backdropGet('node/' . $node->nid);
     $this->assertText($terms['trunk']->name, 'Taxonomy term reference field gets updated to point from term branch to term trunk after merging terms.');
 
     // Testing 'Keep only unique' setting for merging. We create a node assigned
@@ -381,22 +377,23 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         'name' => $name,
       );
 
-      $this->drupalPost($url, $edit, 'Save');
+      $this->backdropPost($url, $edit, 'Save');
       $terms[$term_type] = $this->getLastTerm($this->vocabulary);
     }
 
     $title = $this->randomName();
-    $this->drupalPost('node/add/term-merge-node', array(
+    $this->backdropPost('node/add/term-merge-node', array(
       'title' => $title,
       'field_term_reference[' . LANGUAGE_NONE . ']' => $terms['branch']->name . ', ' . $terms['trunk']->name,
     ), 'Save');
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'merge_fields' => array(),
       'term_branch_keep' => TRUE,
       'keep_only_unique' => FALSE,
-    ));
-    $node = $this->drupalGetNodeByTitle($title);
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
+    $node = $this->backdropGetNodeByTitle($title);
     $is_first_trunk = $node->field_term_reference[LANGUAGE_NONE][0]['tid'] == $terms['trunk']->tid;
     $is_second_trunk = $node->field_term_reference[LANGUAGE_NONE][1]['tid'] == $terms['trunk']->tid;
     $this->assertTrue($is_first_trunk && $is_second_trunk, 'The same terms are kept in term reference field values if "Keep only unique" is off.');
@@ -404,13 +401,14 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     // We switch roles of 'trunk' and 'branch' now. We have a node with 2 terms,
     // if we merge them into another with "Keep only unique" on we are supposed
     // to have only 1 term after merging.
-    actions_do('term_merge_action', $terms['trunk'], array(
+    $action_context = array(
       'term_trunk' => $terms['branch']->tid,
       'merge_fields' => array(),
       'term_branch_keep' => TRUE,
       'keep_only_unique' => TRUE,
-    ));
-    $node = $this->drupalGetNodeByTitle($title, TRUE);
+    );
+    actions_execute('term_merge_action', $terms['trunk'], $action_context);
+    $node = $this->backdropGetNodeByTitle($title, TRUE);
     $is_single = count($node->field_term_reference[LANGUAGE_NONE]) == 1;
     $is_expected_term = $node->field_term_reference[LANGUAGE_NONE][0]['tid'] == $terms['branch']->tid;
     $this->assertTrue($is_single && $is_expected_term, 'Only one term is kept in term reference field values if "Keep only unique" is on.');
@@ -424,10 +422,10 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
    * input.
    */
   public function testTermMergeResistance() {
-    drupal_static_reset();
+    backdrop_static_reset();
 
     // Trying to merge 2 terms from 2 different vocabularies.
-    $this->drupalPost('admin/structure/taxonomy/add', array(
+    $this->backdropPost('admin/structure/taxonomy/add', array(
       'name' => $this->randomName(),
       'machine_name' => 'vocabulary2',
     ), 'Save');
@@ -443,14 +441,15 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         'name' => $this->randomName(),
       );
 
-      $this->drupalPost($url, $edit, 'Save');
-      $terms[$term_type] = $this->getLastTerm(taxonomy_vocabulary_machine_name_load($term_type));
+      $this->backdropPost($url, $edit, 'Save');
+      $terms[$term_type] = $this->getLastTerm(taxonomy_vocabulary_load($term_type));
     }
 
-    actions_do('term_merge_action', $terms['vocabulary'], array(
+    $action_context = array(
       'term_trunk' => $terms['vocabulary2']->tid,
       'term_branch_keep' => FALSE,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['vocabulary'], $action_context);
     $this->termMergeResistanceAssert($terms, 'Testing merging 2 terms from 2 different vocabularies.');
 
     // Trying to merge a parent into its child.
@@ -458,7 +457,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
       'parent' => FALSE,
       'child' => FALSE,
     );
-    drupal_static_reset();
+    backdrop_static_reset();
 
     foreach ($terms as $term_type => $tmp) {
       $url = 'admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/add';
@@ -470,14 +469,15 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         $edit['parent[]'] = array($terms['parent']->tid);
       }
 
-      $this->drupalPost($url, $edit, 'Save');
+      $this->backdropPost($url, $edit, 'Save');
       $terms[$term_type] = $this->getLastTerm($this->vocabulary);
     }
 
-    actions_do('term_merge_action', $terms['parent'], array(
+    $action_context = array(
       'term_trunk' => $terms['child']->tid,
       'term_branch_keep' => FALSE,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['parent'], $action_context);
     $this->termMergeResistanceAssert($terms, 'Testing merging a parent into its child.');
 
     // Trying to merge a term into itself.
@@ -492,27 +492,28 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         'name' => $name,
       );
 
-      $this->drupalPost($url, $edit, 'Save');
+      $this->backdropPost($url, $edit, 'Save');
       $terms[$term_type] = $this->getLastTerm($this->vocabulary);
     }
 
-    actions_do('term_merge_action', $terms['single'], array(
+    $action_context = array(
       'term_trunk' => $terms['single']->tid,
       'term_branch_keep' => FALSE,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['single'], $action_context);
     $this->termMergeResistanceAssert($terms, 'Testing merging a term into itself.');
 
     // Making sure the access rights are respected.
-    $account = $this->drupalCreateUser(array('merge vocabulary2 terms'));
-    $this->drupalLogin($account);
-    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
+    $account = $this->backdropCreateUser(array('merge vocabulary2 terms'));
+    $this->backdropLogin($account);
+    $this->backdropGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertResponse(403, 'Per vocabulary term merge permissions are respected in the module - an account cannot merge terms in the vocabulary in which he is not supposed to be able to merge.');
-    $this->drupalGet('admin/structure/taxonomy/vocabulary2/merge');
+    $this->backdropGet('admin/structure/taxonomy/vocabulary2/merge');
     $this->assertResponse(200, 'Per vocabulary term merge permissions are respected in the module - an account can merge terms in the vocabulary in which he is supposed to be able to merge.');
 
     // Test the threshold for "select" widget of the trunk term.
-    variable_set('term_merge_select_limit', 0);
-    $this->drupalGet('admin/structure/taxonomy/vocabulary2/merge');
+    config_set('term_merge', 'select_limit', 0);
+    $this->backdropGet('admin/structure/taxonomy/vocabulary2/merge');
     $this->assertFieldByXPath('//input[@type="radio"][@name="term_trunk[widget]"][@value="autocomplete"][@checked="checked"]', NULL, 'Threshold for "select" widget of the trunk term is taken into consideration.');
   }
 
@@ -521,33 +522,33 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
    */
   public function testTermMergeBatch() {
     // Adding fields with unlimited cardinality to our vocabulary.
-    $this->drupalPost('admin/structure/taxonomy/vocabulary/fields', array(
+    $this->backdropPost('admin/structure/taxonomy/vocabulary/fields', array(
       'fields[_add_new_field][label]' => 'Test Unlimited Text',
       'fields[_add_new_field][field_name]' => 'test_text',
       'fields[_add_new_field][type]' => 'text',
       'fields[_add_new_field][widget_type]' => 'text_textfield',
     ), 'Save');
-    $this->drupalPost(NULL, array(), 'Save field settings');
-    $this->drupalPost(NULL, array(
+    $this->backdropPost(NULL, array(), 'Save field settings');
+    $this->backdropPost(NULL, array(
       'field[cardinality]' => FIELD_CARDINALITY_UNLIMITED,
     ), 'Save settings');
 
     // Additionally we need to create a new content type and assign term
     // reference field to this new content type.
-    $this->drupalPost('admin/structure/types/add', array(
+    $this->backdropPost('admin/structure/types/add', array(
       'name' => $this->randomName(),
       'type' => 'term_merge_node',
     ), 'Save content type');
-    $this->drupalPost('admin/structure/types/manage/term-merge-node/fields', array(
+    $this->backdropPost('admin/structure/types/manage/term-merge-node/fields', array(
       'fields[_add_new_field][label]' => 'Term Reference',
       'fields[_add_new_field][field_name]' => 'term_reference',
       'fields[_add_new_field][type]' => 'taxonomy_term_reference',
       'fields[_add_new_field][widget_type]' => 'taxonomy_autocomplete',
     ), 'Save');
-    $this->drupalPost(NULL, array(
+    $this->backdropPost(NULL, array(
       'field[settings][allowed_values][0][vocabulary]' => $this->vocabulary->machine_name,
     ), 'Save field settings');
-    $this->drupalPost(NULL, array(), 'Save settings');
+    $this->backdropPost(NULL, array(), 'Save settings');
     // Flushing fields API cache.
     _field_info_collate_fields(TRUE);
 
@@ -563,7 +564,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
     );
     foreach ($cases as $case) {
       // Creating a necessary set of terms in the vocabulary.
-      drupal_static_reset();
+      backdrop_static_reset();
       $terms = array(
         'parent' => FALSE,
         'another_parent' => FALSE,
@@ -592,7 +593,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
             break;
         }
 
-        $this->drupalPost($url, $edit, 'Save');
+        $this->backdropPost($url, $edit, 'Save');
         $terms[$term_type] = $this->getLastTerm($this->vocabulary);
       }
 
@@ -614,17 +615,17 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           $init_url = 'admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge';
           // It doesn't really matter which widget we use, we test widgets
           // throughout in other cases.
-          $term_trunk_widget = array_rand(drupal_map_assoc(array('select', 'autocomplete')));
+          $term_trunk_widget = array_rand(backdrop_map_assoc(array('select', 'autocomplete')));
           break;
 
         case 'taxonomy_term_tab':
           $init_url = 'taxonomy/term/' . $terms['parent']->tid . '/merge';
           // It doesn't really matter which widget we use, we test widgets
           // throughout in other cases.
-          $term_trunk_widget = array_rand(drupal_map_assoc(array('select', 'autocomplete')));
+          $term_trunk_widget = array_rand(backdrop_map_assoc(array('select', 'autocomplete')));
           // Assert that the term, for which the tab was clicked, is selected as
           // term branch by default.
-          $this->drupalGet($init_url);
+          $this->backdropGet($init_url);
           $this->assertOptionSelected('edit-term-branch', $terms['parent']->tid, 'Clicking the "Merge Terms" tab from a term view page sets the viewed term as a term branch by default.');
           break;
 
@@ -633,7 +634,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           $term_trunk_widget = 'select';
           // Making sure for the term trunk select the selected term branch are
           // not available, nor their children.
-          $this->drupalGet($init_url);
+          $this->backdropGet($init_url);
           $matches = array();
           preg_match('#\<select[^>]+name="term_trunk\[tid\]"[^>]*\>.+?\</select\>#si', $this->content, $matches);
           $term_trunk_options = $matches[0];
@@ -649,8 +650,8 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
 
           // Test autocomplete widget menu path to make sure it does reply
           // with valid suggestions.
-          $response = $this->drupalGet('term-merge/autocomplete/term-trunk/' . $this->vocabulary->machine_name . '/' . drupal_strtoupper($terms['term_trunk']->name));
-          $response = drupal_json_decode($response);
+          $response = $this->backdropGet('term-merge/autocomplete/term-trunk/' . $this->vocabulary->machine_name . '/' . backdrop_strtoupper($terms['term_trunk']->name));
+          $response = backdrop_json_decode($response);
           $autocomplete_key = $terms['term_trunk']->name . ' (' . $terms['term_trunk']->tid . ')';
           $this->assertTrue(isset($response[$autocomplete_key]), 'Autocomplete menu path replies with valid suggestions for term trunk autocomplete widget.');
 
@@ -662,12 +663,12 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           );
           foreach ($prohibited_terms as $term => $assert_message) {
             $term = $terms[$term];
-            $this->drupalGet($init_url);
-            $this->drupalPostAJAX(NULL, array(
+            $this->backdropGet($init_url);
+            $this->backdropPostAJAX(NULL, array(
               'term_branch[]' => array($terms['parent']->tid),
               'term_trunk[widget]' => $term_trunk_widget,
             ), 'term_trunk[widget]');
-            $this->drupalPost(NULL, array(
+            $this->backdropPost(NULL, array(
               'term_branch[]' => array($terms['parent']->tid),
               'term_trunk[widget]' => $term_trunk_widget,
               'term_trunk[tid]' => $term->name . ' (' . $term->tid . ')',
@@ -688,12 +689,12 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           );
           foreach ($prohibited_terms as $term => $assert_message) {
             $term = $terms[$term];
-            $this->drupalGet($init_url);
-            $this->drupalPostAJAX(NULL, array(
+            $this->backdropGet($init_url);
+            $this->backdropPostAJAX(NULL, array(
               'term_branch[]' => array($terms['parent']->tid),
               'term_trunk[widget]' => $term_trunk_widget,
             ), 'term_trunk[widget]');
-            $this->drupalPost(NULL, array(
+            $this->backdropPost(NULL, array(
               'term_branch[]' => array($terms['parent']->tid),
               'term_trunk[widget]' => $term_trunk_widget,
               'term_trunk[tid]' => $term->name,
@@ -706,7 +707,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           $init_url = 'admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge';
           // It doesn't really matter which widget we use, we test widgets
           // throughout in other cases.
-          $term_trunk_widget = array_rand(drupal_map_assoc(array('select', 'autocomplete')));
+          $term_trunk_widget = array_rand(backdrop_map_assoc(array('select', 'autocomplete')));
           // We embed extra info related to field values merging into
           // $term_trunk_edit.
           $term_trunk_edit['merge_fields[field_test_text]'] = TRUE;
@@ -716,21 +717,21 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           $init_url = 'admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge';
           // It doesn't really matter which widget we use, we test widgets
           // throughout in other cases.
-          $term_trunk_widget = array_rand(drupal_map_assoc(array('select', 'autocomplete')));
+          $term_trunk_widget = array_rand(backdrop_map_assoc(array('select', 'autocomplete')));
           break;
       }
 
       // Creating a new node and setting its term reference field to point to
       // the term branch.
       $title = $this->randomName();
-      $this->drupalPost('node/add/term-merge-node', array(
+      $this->backdropPost('node/add/term-merge-node', array(
         'title' => $title,
         'field_term_reference[' . LANGUAGE_NONE . ']' => $terms['term1']->name,
       ), 'Save');
-      $node = $this->drupalGetNodeByTitle($title, TRUE);
+      $node = $this->backdropGetNodeByTitle($title, TRUE);
 
       // Calling the Term Merge form.
-      $this->drupalGet($init_url);
+      $this->backdropGet($init_url);
 
       // Choosing term branches.
       $term_branches = array('term1', 'term2', 'term3');
@@ -738,12 +739,12 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
       foreach ($term_branches as $term_type) {
         $term_branches_edit[] = $terms[$term_type]->tid;
       }
-      $this->drupalPostAJAX(NULL, array(
+      $this->backdropPostAJAX(NULL, array(
         'term_branch[]' => $term_branches_edit,
       ), 'term_branch[]');
 
       // Choosing the widget for trunk term.
-      $this->drupalPostAJAX(NULL, array(
+      $this->backdropPostAJAX(NULL, array(
         'term_branch[]' => $term_branches_edit,
         'term_trunk[widget]' => $term_trunk_widget,
       ), 'term_trunk[widget]');
@@ -766,13 +767,13 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         'term_branch_keep' => FALSE,
         'step' => 2,
       );
-      $this->drupalPost(NULL, $edit, 'Submit');
-      $this->drupalPost(NULL, array(), 'Confirm');
+      $this->backdropPost(NULL, $edit, 'Submit');
+      $this->backdropPost(NULL, array(), 'Confirm');
 
       // Making sure all the branches are deleted.
       foreach ($term_branches as $term_type) {
         $term = $terms[$term_type];
-        $this->drupalGet('taxonomy/term/' . $term->tid);
+        $this->backdropGet('taxonomy/term/' . $term->tid);
         $this->assertResponse(404, 'Branch term ' . $term_type . ' has been deleted after merging.');
       }
 
@@ -795,7 +796,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
         case 'do_not_merge_fields':
           // We need to assert that no values for field have been merged from
           // branch terms into the values of trunk term.
-          $this->drupalGet('taxonomy/term/' . $term_trunk->tid);
+          $this->backdropGet('taxonomy/term/' . $term_trunk->tid);
           foreach ($term_branches as $term_type) {
             $items = field_get_items('taxonomy_term', $terms[$term_type], 'field_test_text');
             foreach ($items as $delta => $item) {
@@ -805,7 +806,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
           break;
       }
 
-      $this->drupalGet('taxonomy/term/' . $term_trunk->tid);
+      $this->backdropGet('taxonomy/term/' . $term_trunk->tid);
 
       foreach ($text_assertions as $k => $v) {
         $this->assertText($v, 'Term trunk has the property ' . $k);
@@ -813,7 +814,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
 
       // Making sure the taxonomy term reference in other entities are updated
       // to point from term branches to the just created term trunk.
-      $this->drupalGet('node/' . $node->nid);
+      $this->backdropGet('node/' . $node->nid);
       $this->assertText($term_trunk->name, 'Taxonomy term reference fields in other entities are updated to point from term branches to the term trunk.');
     }
   }
@@ -830,7 +831,7 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
    */
   protected function termMergeResistanceAssert($terms, $message) {
     foreach ($terms as $term) {
-      $this->drupalGet('taxonomy/term/' . $term->tid);
+      $this->backdropGet('taxonomy/term/' . $term->tid);
       $this->assertResponse(200, $message);
     }
   }
@@ -842,29 +843,18 @@ class TermMergeTermMergeWebTestCase extends TermMergeWebTestCase {
 class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
 
   /**
-   * GetInfo method.
-   */
-  public static function getInfo() {
-    return array(
-      'name' => 'Duplicate terms merge',
-      'description' => 'Ensure that the feature <i>merge duplicate terms</i> of module Term Merge works correctly.',
-      'group' => 'Term Merge',
-    );
-  }
-
-  /**
    * Test access rights.
    */
   public function testDisabledAndPermissions() {
     // Trying a user who doesn't have enough permissions.
-    $account = $this->drupalCreateUser();
-    $this->drupalLogin($account);
-    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates');
+    $account = $this->backdropCreateUser();
+    $this->backdropLogin($account);
+    $this->backdropGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates');
     $this->assertResponse(403, 'Access to Merge Duplicate Terms is denied for a user who does not have enough permissions.');
 
     // Trying a user who have enough permissions.
-    $this->drupalLogin($this->admin);
-    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates');
+    $this->backdropLogin($this->admin);
+    $this->backdropGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates');
     $this->assertResponse(200, 'Access to Merge Duplicate Terms is granted for a user who has enough permissions.');
   }
 
@@ -907,16 +897,16 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
     // Test duplicate suggestion plugin type. Make sure multiple duplicated
     // suggestions are properly handed and make sure each of the duplicate
     // suggestions does its function.
-    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates');
+    $this->backdropGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates');
     $this->assertSuggestedDuplicates(array_merge($groups['triple_different_parent'], $groups['random']), 'Filtering only by term names yields expected results.');
 
-    $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', array(
+    $this->backdropPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', array(
       'settings[duplicate_suggestion][name]' => FALSE,
       'settings[duplicate_suggestion][description]' => TRUE,
     ), 'Re-run duplicate search');
     $this->assertSuggestedDuplicates(array_merge($groups['triple_different_parent'], $groups['random']), 'Filtering only by term description yields expected results.');
 
-    $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', array(
+    $this->backdropPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', array(
       'settings[duplicate_suggestion][name]' => FALSE,
       'settings[duplicate_suggestion][parent]' => TRUE,
     ), 'Re-run duplicate search');
@@ -925,7 +915,7 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
     $expected_terms[] = $groups['triple_different_parent'][0];
     $this->assertSuggestedDuplicates($expected_terms, 'Filtering only by term parent yields expected results.');
 
-    $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', array(
+    $this->backdropPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', array(
       'settings[duplicate_suggestion][name]' => TRUE,
       'settings[duplicate_suggestion][parent]' => TRUE,
     ), 'Re-run duplicate search');
@@ -939,7 +929,7 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
 
     // Making sure the term in 'triple_different_parent' that does not have a
     // parent, is not listed when we invoke duplicate tool on a parent term.
-    $this->drupalGet('taxonomy/term/' . $groups['parent'][0]->tid . '/merge/duplicates');
+    $this->backdropGet('taxonomy/term/' . $groups['parent'][0]->tid . '/merge/duplicates');
     $this->assertNoFieldByName('group[' . $this->duplicateHashTerm($groups['triple_different_parent'][0]) . '][duplicates][' . $groups['triple_different_parent'][0]->tid . ']', 'Duplicate term is not listed when it is not among children of a term, on which Term Merge module was invoked.');
 
     $edit = array();
@@ -949,7 +939,7 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
     $edit['group[' . $this->duplicateHashTerm($groups['triple_different_parent'][1]) . '][trunk_tid]'] = $groups['triple_different_parent'][1]->tid;
     $edit['group[' . $this->duplicateHashTerm($groups['triple_different_parent'][2]) . '][duplicates][' . $groups['triple_different_parent'][2]->tid . ']'] = TRUE;
     $groups['triple_different_parent'][2]->merged = TRUE;
-    $this->drupalPost('taxonomy/term/' . $groups['parent'][0]->tid . '/merge/duplicates', $edit, 'Submit');
+    $this->backdropPost('taxonomy/term/' . $groups['parent'][0]->tid . '/merge/duplicates', $edit, 'Submit');
 
     //  Trying to merge multiple terms. We merge all but the 1st term.
     $edit = array();
@@ -960,12 +950,12 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
         $groups['random'][$k]->merged = TRUE;
       }
     }
-    $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', $edit, 'Submit');
+    $this->backdropPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge/duplicates', $edit, 'Submit');
 
     // Asserting results of merging.
     foreach  ($groups as $group) {
       foreach ($group as $term) {
-        $this->drupalGet('taxonomy/term/' . $term->tid);
+        $this->backdropGet('taxonomy/term/' . $term->tid);
         $code = isset($term->merged) && $term->merged ? 404 : 200;
         $message = isset($term->merged) && $term->merged ? 'Term #' . $term->tid . ' has been successfully merged.' : 'Term #' . $term->tid . ' has been successfully untouched during merging.';
         $this->assertResponse($code, $message);
@@ -997,16 +987,16 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
         $term_description = '';
         // Randomizing case of the group name.
         foreach (str_split($name) as $symbol) {
-          $symbol = rand(0, 1) ? drupal_strtoupper($symbol) : drupal_strtolower($symbol);
+          $symbol = rand(0, 1) ? backdrop_strtoupper($symbol) : backdrop_strtolower($symbol);
           $term_name .= $symbol;
         }
         // Getting description in different cases.
         foreach (str_split($description) as $symbol) {
-          $symbol = rand(0, 1) ? drupal_strtoupper($symbol) : drupal_strtolower($symbol);
+          $symbol = rand(0, 1) ? backdrop_strtoupper($symbol) : backdrop_strtolower($symbol);
           $term_description .= $symbol;
         }
         $term = (object) array(
-          'vid' => $this->vocabulary->vid,
+          'vocabulary' => $this->vocabulary->machine_name,
           'name' => $term_name,
           'description' => $description,
         );
@@ -1039,7 +1029,7 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
       $hash_chunk = '';
       switch ($duplicate_suggestion) {
         case 'name':
-          $hash_chunk = drupal_strtoupper($term->name);
+          $hash_chunk = backdrop_strtoupper($term->name);
           // Trying transliteration, if available.
           if (module_exists('transliteration')) {
             $hash_chunk = transliteration_get($hash_chunk);
@@ -1049,7 +1039,7 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
           break;
 
         case 'description':
-          $hash_chunk = drupal_strtoupper($term->description);
+          $hash_chunk = backdrop_strtoupper($term->description);
           break;
 
         case 'parent':
@@ -1085,7 +1075,7 @@ class DuplicatesTermMergeWebTestCase extends TermMergeWebTestCase {
 class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
 
   /**
-   * Fully loaded Drupal user object of the user who has access to configure
+   * Fully loaded Backdrop user object of the user who has access to configure
    * redirects.
    *
    * @var object
@@ -1101,7 +1091,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
     $modules[] = 'path';
     parent::setUp($modules);
 
-    $this->superAdmin = $this->drupalCreateUser(array(
+    $this->superAdmin = $this->backdropCreateUser(array(
       'administer taxonomy',
       'administer term merge',
       'merge terms',
@@ -1113,38 +1103,27 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
   }
 
   /**
-   * GetInfo method.
-   */
-  public static function getInfo() {
-    return array(
-      'name' => 'Redirect module integration',
-      'description' => 'Ensure that the module Term Merge integrates with ' . l('Redirect', 'http://drupal.org/project/redirect') . '/Path modules correctly.',
-      'group' => 'Term Merge',
-    );
-  }
-
-  /**
    * Test disabled Redirect module and access rights.
    */
   public function testDisabledAndPermissions() {
     // Checking access rights required to set up redirection during term
     // merging.
-    $this->drupalLogin($this->admin);
-    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
+    $this->backdropLogin($this->admin);
+    $this->backdropGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertNoPattern('#\<select[^>]+name="redirect"[^>]*\>#i', 'No redirection settings are available for a user that does not possess corresponding permissions.');
 
     // Set a default value to make sure term merge form uses it.
-    variable_set('term_merge_default_redirect', 0);
+    config_set('term_merge', 'default_redirect', 0);
 
-    $this->drupalLogin($this->superAdmin);
-    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
+    $this->backdropLogin($this->superAdmin);
+    $this->backdropGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertPattern('#\<select[^>]+name="redirect"[^>]*\>#i', 'Redirection settings are available for a user that possesses corresponding permissions.');
-    $this->assertFieldByXPath('//select[@name="redirect"]/option[@value="' . variable_get('term_merge_default_redirect', TERM_MERGE_NO_REDIRECT) . '"][@selected="selected"]',  NULL,'The default redirect action is properly set.');
+    $this->assertFieldByXPath('//select[@name="redirect"]/option[@value="' . config_get('term_merge.settings', 'default_redirect') . '"][@selected="selected"]',  NULL,'The default redirect action is properly set.');
 
     // Making sure redirect settings are not available during merging when
     // merging with disabled Redirect module.
     module_disable(array('redirect'));
-    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
+    $this->backdropGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertNoPattern('#\<select[^>]+name="redirect"[^>]*\>#i', 'No redirection settings are available when the redirect module is disabled.');
   }
 
@@ -1152,22 +1131,24 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
    * Test the action 'term_merge_action' in terms of integration with Redirect.
    */
   public function testTermMergeAction() {
-    $this->drupalLogin($this->superAdmin);
+    $this->backdropLogin($this->superAdmin);
     $terms = $this->createTerms(array('branch', 'trunk'));
 
     // Testing default value.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
     $this->assertRedirectIntegration($terms, 'By default no redirects should be made.');
 
     // Testing no redirection.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
       'redirect' => TERM_MERGE_NO_REDIRECT,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
     $this->assertRedirectIntegration($terms, 'No redirects are made, if action is not instructed to make ones.');
 
     // Testing 301 redirection. Besides redirecting 'taxonomy/term/[branch-tid]'
@@ -1193,17 +1174,18 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
     redirect_hash($redirect);
     redirect_save($redirect);
 
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'redirect' => 301,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
 
     $terms['branch']->redirect = $terms['trunk'];
     $this->assertRedirectIntegration($terms, 'Redirects are made, if action is instructed to make ones.');
 
-    $this->drupalGet($redirect_source);
+    $this->backdropGet($redirect_source);
     $this->assertUrl('taxonomy/term/' . $terms['trunk']->tid, array(), 'Redirect pointing to <em>taxonomy/term/[branch-tid]</em> now points to <em>taxonomy/term/[trunk-tid]</em>.');
-    $this->drupalGet($redirect_source . '/feed');
+    $this->backdropGet($redirect_source . '/feed');
     $this->assertUrl('taxonomy/term/' . $terms['trunk']->tid . '/feed', array(), 'Redirect pointing to <em>taxonomy/term/[branch-tid]/feed</em> now points to <em>taxonomy/term/[trunk-tid]/feed</em>.');
   }
 
@@ -1211,29 +1193,29 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
    * Test Term Merge batch in terms of integration with Redirect/Path modules.
    */
   public function testTermMergeBatch() {
-    $this->drupalLogin($this->superAdmin);
+    $this->backdropLogin($this->superAdmin);
 
     // Trying to merge without redirection.
     $terms = $this->createTerms(array('branch', 'trunk'));
-    $this->drupalPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
+    $this->backdropPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
       'term_branch[]' => array($terms['branch']->tid),
       'term_trunk[widget]' => 'select',
       'term_trunk[tid]' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
       'redirect' => TERM_MERGE_NO_REDIRECT,
     ), 'Submit');
-    $this->drupalPost(NULL, array(), 'Confirm');
+    $this->backdropPost(NULL, array(), 'Confirm');
     $this->assertRedirectIntegration($terms, 'No redirection made after running merge batch when not instructed to make redirection.');
 
     // Trying to merge into a term with redirection.
-    $this->drupalPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
+    $this->backdropPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
       'term_branch[]' => array($terms['branch']->tid),
       'term_trunk[widget]' => 'select',
       'term_trunk[tid]' => $terms['trunk']->tid,
       'redirect' => 0,
     ), 'Submit');
     $terms['branch']->redirect = $terms['trunk'];
-    $this->drupalPost(NULL, array(), 'Confirm');
+    $this->backdropPost(NULL, array(), 'Confirm');
     $this->assertRedirectIntegration($terms, 'Redirection is made after running merge batch merging into an existing term, when instructed to make redirection.');
   }
 
@@ -1255,21 +1237,21 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
       if (isset($term->redirect)) {
         $sources = array('taxonomy/term/' . $term->tid);
         // Additionally checking path alias.
-        if (!in_array(drupal_get_path_alias($sources[0]), $sources)) {
-          $sources[] = drupal_get_path_alias($sources[0]);
+        if (!in_array(backdrop_get_path_alias($sources[0]), $sources)) {
+          $sources[] = backdrop_get_path_alias($sources[0]);
         }
         foreach ($sources as $source) {
-          $this->drupalGet($source);
+          $this->backdropGet($source);
           $this->assertUrl('taxonomy/term/' . $term->redirect->tid, array(), $message);
         }
 
         // Additionally assert the 'taxonomy/term/*/feed' path.
         $sources = array('taxonomy/term/' . $term->tid . '/feed');
-        if (!in_array(drupal_get_path_alias($sources[0]), $sources)) {
-          $sources[] = drupal_get_path_alias($sources[0]);
+        if (!in_array(backdrop_get_path_alias($sources[0]), $sources)) {
+          $sources[] = backdrop_get_path_alias($sources[0]);
         }
         foreach ($sources as $source) {
-          $this->drupalGet($source);
+          $this->backdropGet($source);
           $this->assertUrl('taxonomy/term/' . $term->redirect->tid . '/feed', array(), $message);
         }
       }
@@ -1292,7 +1274,7 @@ class RedirectTermMergeWebTestCase extends TermMergeWebTestCase {
   protected function createTerms($terms) {
     $return = array();
     foreach ($terms as $v) {
-      $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/add', array(
+      $this->backdropPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/add', array(
         'name' => $this->randomName(),
         'path[alias]' => $v . $this->randomName(),
       ), 'Save');
@@ -1363,24 +1345,13 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
   }
 
   /**
-   * GetInfo method.
-   */
-  public static function getInfo() {
-    return array(
-      'name' => 'Synonyms module integration',
-      'description' => 'Ensure that the module Term Merge integrates with ' . l('Synonyms', 'http://drupal.org/project/synonyms') . ' module correctly.',
-      'group' => 'Term Merge',
-    );
-  }
-
-  /**
    * Test disabled Synonyms module.
    */
   public function testDisabled() {
     // Making sure synonyms settings are not available during merging when
     // Synonyms module is disabled.
     module_disable(array('synonyms'));
-    $this->drupalGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
+    $this->backdropGet('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/merge');
     $this->assertNoText(t('Add as Synonyms'), 'No synonyms settings are available when the Synonyms module is disabled.');
   }
 
@@ -1388,29 +1359,32 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
    * Test the action 'term_merge_action' in terms of integration with Synonyms.
    */
   public function testTermMergeAction() {
-    $this->drupalLogin($this->admin);
+    $this->backdropLogin($this->admin);
     $terms = $this->createTerms(array('branch', 'trunk'));
 
     // Testing default value.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
     $this->assertSynonymsIntegration($terms, 'By default no synonyms should be added.');
 
     // Testing no synonyms adding.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
       'synonyms' => NULL,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
     $this->assertSynonymsIntegration($terms, 'No synonyms are added, if action is not instructed to make ones.');
 
     // Testing adding as a synonym.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'synonyms' => $this->behavior_implementation['provider'],
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
 
     $terms['trunk']->synonyms = array($terms['branch']->name);
     $this->assertSynonymsIntegration($terms, 'Synonyms are added, if action is instructed to add ones.');
@@ -1422,18 +1396,18 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
   public function testTermMergeBatch() {
     // Trying to merge without synonyms adding.
     $terms = $this->createTerms(array('branch', 'trunk'));
-    $this->drupalPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
+    $this->backdropPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
       'term_branch[]' => array($terms['branch']->tid),
       'term_trunk[widget]' => 'select',
       'term_trunk[tid]' => $terms['trunk']->tid,
       'term_branch_keep' => TRUE,
       'synonyms' => '',
     ), 'Submit');
-    $this->drupalPost(NULL, array(), 'Confirm');
+    $this->backdropPost(NULL, array(), 'Confirm');
     $this->assertSynonymsIntegration($terms, 'No synonyms are added after running merge batch when not instructed to add synonyms.');
 
     // Trying to merge into a term with synonyms adding.
-    $this->drupalPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
+    $this->backdropPost('taxonomy/term/' . $terms['branch']->tid . '/merge', array(
       'term_branch[]' => array($terms['branch']->tid),
       'term_trunk[widget]' => 'select',
       'term_trunk[tid]' => $terms['trunk']->tid,
@@ -1441,7 +1415,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
       'synonyms' => $this->behavior_implementation['provider'],
     ), 'Submit');
     $terms['trunk']->synonyms = array($terms['branch']->name);
-    $this->drupalPost(NULL, array(), 'Confirm');
+    $this->backdropPost(NULL, array(), 'Confirm');
     $this->assertSynonymsIntegration($terms, 'Synonyms are added after running merge batch merging into an existing term, when instructed to add synonyms.');
   }
 
@@ -1491,7 +1465,7 @@ class SynonymsTermMergeWebTestCase extends TermMergeWebTestCase {
   protected function createTerms($terms) {
     $return = array();
     foreach ($terms as $v) {
-      $this->drupalPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/add', array(
+      $this->backdropPost('admin/structure/taxonomy/' . $this->vocabulary->machine_name . '/add', array(
         'name' => $v,
       ), 'Save');
       $return[$v] = $this->getLastTerm($this->vocabulary);
@@ -1532,19 +1506,8 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
     $display_id = 'default';
     $view->set_display($display_id);
 
-    views_save_view($view);
+    $view->save();
     $this->view = &$view;
-  }
-
-  /**
-   * GetInfo method.
-   */
-  public static function getInfo() {
-    return array(
-      'name' => 'Views module integration',
-      'description' => 'Ensure that the module Term Merge integrates with ' . l('Views', 'http://drupal.org/project/views') . ' module correctly.',
-      'group' => 'Term Merge',
-    );
   }
 
   /**
@@ -1554,22 +1517,22 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
     // We need to create a content type and attach a term reference field to
     // that bundle in order to have some term reference filter available in
     // Views.
-    $this->drupalPost('admin/structure/types/add', array(
+    $this->backdropPost('admin/structure/types/add', array(
       'name' => $this->randomName(),
       'type' => 'term_merge_node',
     ), 'Save content type');
     $field_name = 'term_reference';
-    $this->drupalPost('admin/structure/types/manage/term-merge-node/fields', array(
+    $this->backdropPost('admin/structure/types/manage/term-merge-node/fields', array(
       'fields[_add_new_field][label]' => 'Term Reference',
       'fields[_add_new_field][field_name]' => $field_name,
       'fields[_add_new_field][type]' => 'taxonomy_term_reference',
       'fields[_add_new_field][widget_type]' => 'taxonomy_autocomplete',
     ), 'Save');
     $field_name = 'field_' . $field_name;
-    $this->drupalPost(NULL, array(
+    $this->backdropPost(NULL, array(
       'field[settings][allowed_values][0][vocabulary]' => $this->vocabulary->machine_name,
     ), 'Save field settings');
-    $this->drupalPost(NULL, array(
+    $this->backdropPost(NULL, array(
       'field[cardinality]' => FIELD_CARDINALITY_UNLIMITED,
     ), 'Save settings');
     // Flushing fields API cache.
@@ -1591,7 +1554,7 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
         'name' => $name,
       );
 
-      $this->drupalPost($url, $edit, 'Save');
+      $this->backdropPost($url, $edit, 'Save');
       $terms[$term_type] = $this->getLastTerm($this->vocabulary);
     }
 
@@ -1617,10 +1580,11 @@ class ViewsTermMergeWebTestCase extends TermMergeWebTestCase {
 
     // After such merge we expect the view's filter to be changed from branch
     // term to trunk term.
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'term_branch_keep' => FALSE,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
 
     // Loading again the view after merging action.
     $this->view = views_get_view($this->view->name);
@@ -1666,23 +1630,12 @@ class EntityReferenceTermMergeWebTestCase extends TermMergeWebTestCase {
    */
   protected $instance = array();
 
-  /**
-   * GetInfo method.
-   */
-  public static function getInfo() {
-    return array(
-      'name' => 'Term Merge Entity Reference',
-      'description' => 'Ensure that the module Term Merge integrates with Entity Reference field type correctly.',
-      'group' => 'Term Merge',
-    );
-  }
-
   public function setUp() {
     $modules = $this->normalizeSetUpArguments(func_get_args());
     $modules[] = 'entityreference';
     parent::setUp($modules);
 
-    $this->drupalPost('admin/structure/types/add', array(
+    $this->backdropPost('admin/structure/types/add', array(
       'name' => $this->randomName(),
       'type' => $this->content_type,
     ), 'Save content type');
@@ -1707,7 +1660,7 @@ class EntityReferenceTermMergeWebTestCase extends TermMergeWebTestCase {
     $nodes = array();
     foreach ($terms as $type => $v) {
       $terms[$type] = (object) array(
-        'vid' => $this->vocabulary->vid,
+        'vocabulary' => $this->vocabulary->machine_name,
         'name' => $this->randomName(),
       );
       taxonomy_term_save($terms[$type]);
@@ -1721,10 +1674,11 @@ class EntityReferenceTermMergeWebTestCase extends TermMergeWebTestCase {
       node_save($nodes[$type]);
     }
 
-    actions_do('term_merge_action', $terms['branch'], array(
+    $action_context = array(
       'term_trunk' => $terms['trunk']->tid,
       'term_branch_keep' => FALSE,
-    ));
+    );
+    actions_execute('term_merge_action', $terms['branch'], $action_context);
 
     foreach ($nodes as $type => $node) {
       $node = entity_load_unchanged('node', $node->nid);

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * @file
  * Batch process callbacks for Term Merge module.
@@ -11,9 +10,9 @@
  * Trigger action 'term_merge_action' on each pair of term branch:term trunk.
  *
  * @param array $term_branch
- *   An array of term tids to be merged, aka term branches
+ *   An array of term tids to be merged, aka term branches.
  * @param int $term_trunk
- *   The tid of the term to merge term branches into, aka term trunk
+ *   The tid of the term to merge term branches into, aka term trunk.
  * @param array $merge_settings
  *   Array of settings that control how merging should happen. Currently
  *   supported settings are:
@@ -40,11 +39,11 @@
  *       is reached). Note: this parameter requires Synonyms module enabled,
  *       otherwise it will be disregarded
  *     - step: (int) How many term branches to merge per script run in batch. If
- *       you are hitting time or memory limits, decrease this parameter
+ *       you are hitting time or memory limits, decrease this parameter.
  * @param array $context
- *   Drupal Batch API context array
+ *   Backdrop Batch API context array.
  */
-function _term_merge_batch_process($term_branch, $term_trunk, $merge_settings, &$context) {
+function _term_merge_batch_process(array $term_branch, int $term_trunk, array $merge_settings, array &$context) {
   // Initializing sandbox.
   if (!isset($context['sandbox']['current'])) {
     $context['sandbox']['current'] = 0;
@@ -68,14 +67,15 @@ function _term_merge_batch_process($term_branch, $term_trunk, $merge_settings, &
   $term_branch = array_slice($term_branch, $context['sandbox']['current'], $length);
   $term_branch = array_values(taxonomy_term_load_multiple($term_branch));
   for ($i = 0; $i < $merge_settings['step'] && $context['sandbox']['current'] < $total; $i++) {
-    actions_do('term_merge_action', $term_branch[$i], array(
+    $action_context = array(
       'term_trunk' => $term_trunk,
       'term_branch_keep' => $merge_settings['term_branch_keep'],
       'merge_fields' => $merge_settings['merge_fields'],
       'keep_only_unique' => $merge_settings['keep_only_unique'],
       'redirect' => $merge_settings['redirect'],
       'synonyms' => $merge_settings['synonyms'],
-    ));
+    );
+    actions_execute('term_merge_action', $term_branch[$i], $action_context);
     $context['sandbox']['current']++;
   }
 
@@ -93,10 +93,10 @@ function _term_merge_batch_process($term_branch, $term_trunk, $merge_settings, &
  */
 function term_merge_batch_finished($success, $results, $operations) {
   if ($success) {
-    drupal_set_message(t('The terms have been successfully merged.'));
+    backdrop_set_message(t('The terms have been successfully merged.'));
   }
   else {
     // An error happened. We have to notify the user.
-    drupal_set_message(t('An error occurred. We are sorry, please, report this error to the maintainers of Term Merge module.'), 'error');
+    backdrop_set_message(t('An error occurred. We are sorry, please, report this error to the maintainers of Term Merge module.'), 'error');
   }
 }

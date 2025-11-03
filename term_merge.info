@@ -1,7 +1,8 @@
+type = module
 name = Term Merge
 description = This module allows you to merge multiple terms into one, while updating all fields referring to those terms to refer to the replacement term instead.
 package = Taxonomy
-core = 7.x
+backdrop = 1.x
 configure = admin/config/user-interface/term-merge
 
 files[] = term_merge.test
@@ -13,7 +14,7 @@ files[] = includes/EntityReferenceTermMergeSynonymsBehavior.class.inc
 
 dependencies[] = taxonomy
 dependencies[] = entity
-dependencies[] = ctools
+dependencies[] = plugin_manager
 
 test_dependencies[] = synonyms:synonyms
 test_dependencies[] = entityreference:entityreference

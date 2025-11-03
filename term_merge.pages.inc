@@ -1,5 +1,4 @@
 <?php
-
 /**
  * @file
  * Menu page callbacks for Term Merge module.
@@ -10,16 +9,16 @@
  *
  * It is extracted into a separate function to better internal code reuse.
  *
- * @param object $vocabulary
- *   Fully loaded Taxonomy vocabulary where the merge should occur
+ * @param TaxonomyVocabulary $vocabulary
+ *   Fully loaded Taxonomy vocabulary where the merge should occur.
  * @param array $term_branch_value
  *   Array of Taxonomy term IDs that are nominated as branch terms.
  */
-function term_merge_form_base(&$form, &$form_state, $vocabulary, $term_branch_value) {
+function term_merge_form_base(&$form, &$form_state, TaxonomyVocabulary $vocabulary, array $term_branch_value) {
   $form['#vocabulary'] = $vocabulary;
   $form['#term_merge_term_branch'] = $term_branch_value;
 
-  $tree = taxonomy_get_tree($vocabulary->vid);
+  $tree = taxonomy_get_tree($vocabulary->machine_name);
 
   $form['term_trunk'] = array(
     '#type' => 'fieldset',
@@ -34,7 +33,7 @@ function term_merge_form_base(&$form, &$form_state, $vocabulary, $term_branch_va
   $term_trunk_widget_options = array(
     'autocomplete' => 'Autocomplete',
   );
-  if (variable_get('taxonomy_override_selector', FALSE) && module_exists('hs_taxonomy')) {
+  if (module_exists('hs_taxonomy') && config_get('hs_taxonomy.settings', 'taxonomy_override_selector')) {
     $term_trunk_widget_options['hs_taxonomy'] = t('Hierarchical Select');
     $term_trunk_widget = 'hs_taxonomy';
   }
@@ -45,7 +44,7 @@ function term_merge_form_base(&$form, &$form_state, $vocabulary, $term_branch_va
 
   // If the vocabulary is too big, by default we want the trunk term widget to
   // be autocomplete instead of select or hs_taxonomy.
-  if (count($tree) > variable_get('term_merge_select_limit', 200)) {
+  if (count($tree) > config_get('term_merge.settings', 'select_limit')) {
     $term_trunk_widget = 'autocomplete';
   }
 
@@ -96,30 +95,29 @@ function term_merge_form_base(&$form, &$form_state, $vocabulary, $term_branch_va
  * other settings needed for the term merge action.
  *
  * @param object $vocabulary
- *   Fully loaded taxonomy vocabulary object
+ *   Fully loaded taxonomy vocabulary object.
  * @param object $term
  *   Fully loaded taxonomy term object that should be selected as the default
  *   merge term in the form. If the $vocabulary is omitted, the vocabulary of
- *   $term is considered
+ *   $term is considered.
  *
  * @return array
  *   Array of the form in Form API format
  *
- * TODO: accidentally this function happens to implement hook_form() which is
- * definitely not my intention. This function must be renamed to a safer name.
+ *   TODO: accidentally this function happens to implement hook_form() which is
+ *   definitely not my intention. This function must be renamed to a safer name.
  */
 function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
   if (is_null($vocabulary)) {
-    $vocabulary = taxonomy_vocabulary_load($term->vid);
+    $vocabulary = taxonomy_vocabulary_load($term->vocabulary);
   }
 
   if (!isset($form_state['storage']['confirm'])) {
     // We are at the set up step.
-
-    $tree = taxonomy_get_tree($vocabulary->vid);
+    $tree = taxonomy_get_tree($vocabulary->machine_name);
 
     $term_branch_value = is_null($term) ? array() : array($term->tid);
-    if (variable_get('taxonomy_override_selector', FALSE) && module_exists('hs_taxonomy')) {
+    if (module_exists('hs_taxonomy') && config_get('hs_taxonomy.settings', 'taxonomy_override_selector')) {
       // We use Hierarchical Select module if it's available and configured to
       // be used for taxonomy selects.
       $form['term_branch'] = array(
@@ -127,11 +125,11 @@ function term_merge_form($form, $form_state, $vocabulary = NULL, $term = NULL) {
         // @todo: figure out why #required => TRUE doesn't work.
         // As a matter of fact, this issue seems to cover our case.
         // http://drupal.org/node/1275862.
-        //'#required' => TRUE,
+        // '#required' => TRUE,
         '#config' => array(
           'module' => 'hs_taxonomy',
           'params' => array(
-            'vid' => $vocabulary->vid,
+            'vocabulary' => $vocabulary->machine_name,
             'exclude_tid' => NULL,
             'root_term'   => FALSE,
           ),
@@ -240,7 +238,7 @@ function term_merge_form_submit($form, &$form_state) {
  *
  * @param object $vocabulary
  *   Fully loaded vocabulary object inside of which the terms are about to be
- *   merged
+ *   merged.
  */
 function term_merge_form_term_trunk_widget_autocomplete_autocomplete($vocabulary) {
   // If the request has a '/' in the search text, then the menu system will have
@@ -255,7 +253,7 @@ function term_merge_form_term_trunk_widget_autocomplete_autocomplete($vocabulary
   $tags_return = $query->addTag('translatable')
     ->addTag('term_access')
     ->fields('t', array('tid', 'name'))
-    ->condition('t.vid', $vocabulary->vid)
+    ->condition('t.vocabulary', $vocabulary->machine_name)
     ->condition('t.name', '%' . db_like($tags_typed) . '%', 'LIKE')
     ->range(0, 10)
     ->execute()
@@ -273,7 +271,7 @@ function term_merge_form_term_trunk_widget_autocomplete_autocomplete($vocabulary
     $term_matches[$key] = check_plain($name . ' [tid: ' . $tid . ']');
   }
 
-  drupal_json_output($term_matches);
+  backdrop_json_output($term_matches);
 }
 
 /**
@@ -294,22 +292,22 @@ function term_merge_form_term_trunk($form, $form_state) {
  * @param object $vocabulary
  *   Fully loaded taxonomy vocabulary object inside of which term merging
  *   occurs, if this argument is omitted, then $parent_term is required and will
- *   be used to obtain information about Taxonomy vocabulary
+ *   be used to obtain information about Taxonomy vocabulary.
  * @param object $parent_term
  *   Fully loaded taxonomy term object using which the function will pull up
  *   the vocabulary inside of which term merging occurs. Duplicate terms will be
- *   sought only among children of this term
+ *   sought only among children of this term.
  */
 function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $parent_term = NULL) {
-  $form['#attached']['js'][drupal_get_path('module', 'term_merge') . '/js/duplicate.form.js'] = array();
+  $form['#attached']['js'][backdrop_get_path('module', 'term_merge') . '/js/duplicate.form.js'] = array();
 
   // Checking if we were not given vocabulary object, we will use term object to
   // obtain the former.
   if (!is_null($parent_term) && is_null($vocabulary)) {
-    $vocabulary = taxonomy_vocabulary_load($parent_term->vid);
+    $vocabulary = taxonomy_vocabulary_load($parent_term->vocabulary);
   }
 
-  $tree = taxonomy_get_tree($vocabulary->vid, is_null($parent_term) ? 0 : $parent_term->tid);
+  $tree = taxonomy_get_tree($vocabulary->machine_name, is_null($parent_term) ? 0 : $parent_term->tid);
 
   // Helpful and self explaining text that should help people understand what's
   // up.
@@ -332,12 +330,12 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
   );
 
   $form['settings']['max_duplicates'] = array(
-    '#type' => 'textfield',
+    '#type' => 'number',
     '#title' => t('Show N duplicates'),
     '#description' => t('Input an integer here - this many duplicates will be shown on the form. Once this amount of possible duplicates is found, the search process terminates.'),
     '#required' => TRUE,
     '#default_value' => isset($form_state['values']['settings']['max_duplicates']) ? $form_state['values']['settings']['max_duplicates'] : 300,
-    '#element_validate' => array('element_validate_integer_positive'),
+    '#min' => 0,
   );
 
   $options = array();
@@ -393,7 +391,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
     $hash = '';
     foreach ($form['settings']['duplicate_suggestion']['#default_value'] as $duplicate_suggestion) {
       $duplicate_suggestion = term_merge_duplicate_suggestion($duplicate_suggestion);
-      $function = ctools_plugin_get_function($duplicate_suggestion, 'hash callback');
+      $function = plugin_manager_get_function($duplicate_suggestion, 'hash callback');
       if ($function) {
         $hash .= $function($term);
       }
@@ -483,7 +481,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
       $parents = array();
       // Adding Root to the hierarchy.
       $parents[] = t('Vocabulary Root');
-      foreach (taxonomy_get_parents_all($term->tid) as $parent) {
+      foreach (taxonomy_term_load_parents_all($term->tid) as $parent) {
         // We do not include the current term in the hierarchy.
         if ($parent->tid != $term->tid) {
           $parents[] = $parent->name;
@@ -523,17 +521,17 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
                     $display = $cache->prepareInstanceDisplay($display, $field['type']);
                     $display['settings']['image_style'] = $image_style['name'];
                   }
-                  $rendered_item = drupal_render(field_view_value('taxonomy_term', $term, $field['field_name'], $item, $display));
+                  $rendered_item = backdrop_render(field_view_value('taxonomy_term', $term, $field['field_name'], $item, $display));
                   break;
 
                 default:
-                  $rendered_item = drupal_render(field_view_value('taxonomy_term', $term, $field['field_name'], $item));
+                  $rendered_item = backdrop_render(field_view_value('taxonomy_term', $term, $field['field_name'], $item));
                   break;
               }
               $options[$term->tid][$field['field_name']]['#items'][] = $rendered_item;
             }
             if (count($options[$term->tid][$field['field_name']]['#items']) > 1) {
-              $options[$term->tid][$field['field_name']] = drupal_render($options[$term->tid][$field['field_name']]);
+              $options[$term->tid][$field['field_name']] = backdrop_render($options[$term->tid][$field['field_name']]);
             }
             else {
               $options[$term->tid][$field['field_name']] = $options[$term->tid][$field['field_name']]['#items'][0];
@@ -561,7 +559,7 @@ function term_merge_duplicates_form($form, &$form_state, $vocabulary = NULL, $pa
     );
 
     if (isset($form['settings']['fields'])) {
-      $header += array_map('check_plain', array_intersect_key($form['settings']['fields']['#options'], drupal_map_assoc($form['settings']['fields']['#default_value'])));
+      $header += array_map('check_plain', array_intersect_key($form['settings']['fields']['#options'], backdrop_map_assoc($form['settings']['fields']['#default_value'])));
     }
 
     $form['wrapper']['group'][$i]['duplicates'] = array(
@@ -628,7 +626,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
     'title' => t('Merging terms'),
     'operations' => array(),
     'finished' => 'term_merge_batch_finished',
-    'file' => drupal_get_path('module', 'term_merge') . '/term_merge.batch.inc',
+    'file' => backdrop_get_path('module', 'term_merge') . '/term_merge.batch.inc',
   );
 
   // Processing general options for merging.
@@ -652,7 +650,7 @@ function term_merge_duplicates_form_submit($form, &$form_state) {
   }
 
   if (empty($batch['operations'])) {
-    drupal_set_message(t('No merging has been made, because you have not selected any duplicate term to merge.'));
+    backdrop_set_message(t('No merging has been made, because you have not selected any duplicate term to merge.'));
   }
   else {
     batch_set($batch);
@@ -670,7 +668,7 @@ function term_merge_duplicates_fieldset_preprocess($element) {
   foreach ($options as $tid => $row) {
     $element['trunk_tid'][$tid]['#title_display'] = 'invisible';
     $options[$tid] = array(
-      'trunk' => drupal_render($element['trunk_tid'][$tid]),
+      'trunk' => backdrop_render($element['trunk_tid'][$tid]),
     ) + $options[$tid];
   }
   $element['trunk_tid']['#title_display'] = 'invisible';

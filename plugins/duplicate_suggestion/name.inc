@@ -17,7 +17,7 @@ $plugin = array(
  */
 function term_merge_duplicate_suggestion_name_hash($term) {
   // Making upper case.
-  $name = drupal_strtoupper($term->name);
+  $name = backdrop_strtoupper($term->name);
   // Trying transliteration, if available.
   if (module_exists('transliteration')) {
     $name = transliteration_get($name);

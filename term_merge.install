@@ -6,15 +6,13 @@
  */
 
 /**
- * Implements hook_uninstall().
+ * Convert variables to config.
  */
-function term_merge_uninstall() {
-  // Cleaning all variables.
-  $results = db_select('variable', 'var')
-    ->fields('var', array('name'))
-    ->condition('var.name', db_like('term_merge_') . '%', 'LIKE')
-    ->execute();
-  foreach ($results as $var) {
-    variable_del($var->name);
-  }
+function term_merge_update_1000() {
+  $config = config('term_merge.settings');
+  $config->set('select_limit', update_variable_get('term_merge_select_limit', 200));
+  $config->set('default_redirect', update_variable_get('term_merge_default_redirect', -1));
+  $config->save();
+  update_variable_del('term_merge_select_limit');
+  update_variable_del('term_merge_default_redirect');
 }

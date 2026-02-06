@@ -30,7 +30,7 @@ function term_merge_config_info() {
 function term_merge_menu() {
   $items = array();
 
-  $items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/merge'] = array(
+  $items['admin/structure/taxonomy/%taxonomy_vocabulary/merge'] = array(
     'title' => 'Merge terms',
     'page callback' => 'backdrop_get_form',
     'page arguments' => array('term_merge_form', 3),
@@ -40,12 +40,12 @@ function term_merge_menu() {
     'type' => MENU_LOCAL_TASK,
   );
 
-  $items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/merge/default'] = array(
+  $items['admin/structure/taxonomy/%taxonomy_vocabulary/merge/default'] = array(
     'title' => 'Default',
     'type' => MENU_DEFAULT_LOCAL_TASK,
   );
 
-  $items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/merge/duplicates'] = array(
+  $items['admin/structure/taxonomy/%taxonomy_vocabulary/merge/duplicates'] = array(
     'title' => 'Merge Duplicate Terms',
     'page callback' => 'backdrop_get_form',
     'page arguments' => array('term_merge_duplicates_form', 3),
@@ -81,7 +81,7 @@ function term_merge_menu() {
     'type' => MENU_LOCAL_TASK,
   );
 
-  $items['term-merge/autocomplete/term-trunk/%taxonomy_vocabulary_machine_name'] = array(
+  $items['term-merge/autocomplete/term-trunk/%taxonomy_vocabulary'] = array(
     'title' => 'Autocomplete Term Merge form term trunk',
     'page callback' => 'term_merge_form_term_trunk_widget_autocomplete_autocomplete',
     'page arguments' => array(3),
